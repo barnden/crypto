@@ -92,23 +92,39 @@ uint64_t Modexp(uint64_t base, uint64_t exp, uint64_t mod)
     if (base % mod == 0)
         return 0;
 
-    // Given a^n (mod m); If n > m, then exp := exp (mod Totient(m))
-    if (exp > mod)
-        exp %= Totient(mod);
-
     // Short circuit squaring
     if (exp == 2)
         return (base * base) % mod;
 
+    // Given a^n (mod m); If n > m, then exp := exp (mod Totient(m))
+    if (exp > mod)
+        exp %= Totient(mod);
+
     auto const m = (sizeof(exp) * 8) - __builtin_clzll(exp);
     auto accumulator = 1ull;
 
+#ifdef MONTGOMERY
+    // Use Montgomery ladder method to do fast powering
+    auto g = base;
+    for (auto i = m; i-- > 0;) {
+        if (exp & (1 << i)) {
+            accumulator = (accumulator * g) % mod;
+            g = (g * g) % mod;
+            continue;
+        }
+
+        g = (accumulator * g) % mod;
+        accumulator = (accumulator * accumulator) % mod;
+    }
+#else
+    // Use traditional fast powering; suceptible to side channel attacks
     for (auto i = m; i-- > 0;) {
         accumulator = (accumulator * accumulator) % mod;
 
         if (exp & (1 << i))
             accumulator = (accumulator * base) % mod;
     }
+#endif
 
     return accumulator;
 }
@@ -152,7 +168,7 @@ bool MillerRabin(uint64_t n)
                 return;
 
             for (auto i = 0ull; i < r; i++) {
-                x = (x * x) % n;
+                x = Modexp(base, 2, n);
 
                 if (x == np)
                     return;

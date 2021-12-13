@@ -1,4 +1,5 @@
 #include "Modmath.h"
+#include <algorithm>
 
 uint64_t gcd(uint64_t a, uint64_t b)
 {
@@ -13,6 +14,11 @@ uint64_t Totient(uint64_t n)
 {
     // Return Euler Totient Function of n
     auto accumulator = 1ull;
+
+    // Totient(p) = p - 1, where p prime.
+    // Check if number is prime
+    if (n > 41 && n % 2 && !MillerRabin(n))
+        return n - 1;
 
     for (auto i = 2; i < n; i++)
         if (gcd(i, n) == 1)
@@ -134,11 +140,12 @@ bool MillerRabin(uint64_t n)
     /**
      * Miller-Rabin primality test
      * Returns true if composite; false if probably prime
+     *
      * Miller-Rabin is a non-deterministic primality test.
-     * However, with the given choice of bases it has been shown
-     * by Sorenson and Webster (doi:10.1090/mcom/3134) that for
-     * values of n < 318,665,857,834,031,151,167,461 that the
-     * bases chosen below are sufficient to determine primality.
+     * It has been shown by Sorenson and Webster (doi:10.1090/mcom/3134) that for
+     * a composite number n < 3,317,044,064,679,887,385,961,981 at least one of
+     * the bases below will be a witness to the compositeness of n. Thus, for the
+     * values of n less than the bound, Miller-Rabin is effectively deterministic.
      */
 
     if (n % 2 == 0)
@@ -153,7 +160,7 @@ bool MillerRabin(uint64_t n)
         r++;
     }
 
-    auto static constexpr bases = std::integer_sequence<uint64_t, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37> {};
+    auto static constexpr bases = std::integer_sequence<uint64_t, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41> {};
     bool composite = false;
 
     [&]<std::size_t... I>(std::index_sequence<I...>)

@@ -81,6 +81,12 @@ public:
         return Point { Coordinate { 0, 0, 0 }, static_cast<Curve>(curve) };
     }
 
+    static inline Point& set_point_at_infinity(Point& point)
+    {
+        point.m_coord = Coordinate { 0, 0, 0 };
+        return point;
+    }
+
     uint64_t GetX() const { return m_coord.m_x; }
     uint64_t GetY() const { return m_coord.m_y; }
 
@@ -90,34 +96,23 @@ public:
     uint64_t GetW() const { return m_coord.m_w; }
     Coordinate GetCoordinate() const { return m_coord; }
 
-    inline friend bool operator|=(Point const& lhs, Point const& rhs)
-    {
-        // return true if points are on same curve
-        return static_cast<Curve>(lhs) == static_cast<Curve>(rhs);
-    }
+    Point& operator+=(Point const& rhs);
+    Point& operator-=(Point const& rhs);
+    Point& operator*=(int64_t rhs);
 
-    inline friend bool operator^=(Point const& lhs, Point const& rhs) { return !(lhs |= rhs); }
+    Point operator+(Point const& rhs);
+    Point operator-(Point const& rhs);
 
-    inline friend bool operator==(Point const& lhs, Point const& rhs)
-    {
-        if (lhs ^= rhs)
-            return false;
+    friend Point operator-(Point const& rhs);
+    friend Point operator*(int64_t lhs, Point const& rhs);
+    friend Point operator*(Point const& lhs, int64_t rhs);
 
-        return (lhs.GetX() == rhs.GetX()) && (lhs.GetY() == rhs.GetY());
-    }
+    bool operator|=(Point const& rhs);
+    bool operator^=(Point const& rhs);
+    bool operator==(Point const& rhs);
+    bool operator!=(Point const& rhs);
 
-    inline friend bool operator!=(Point const& lhs, Point const& rhs) { return !(lhs == rhs); }
-
-    inline friend std::ostream& operator<<(std::ostream& stream, Point const& point)
-    {
-        if (point.GetW() == 0)
-            return stream << "inf";
-
-        if (point.GetW() == 2)
-            return stream << "err";
-
-        return stream << "(" << point.GetX() << ", " << point.GetY() << ")";
-    }
+    friend std::ostream& operator<<(std::ostream& stream, Point const& point);
 
 private:
     Coordinate m_coord;
@@ -134,7 +129,8 @@ public:
     {
     }
 
-    inline std::vector<Point> GetPoints() {
+    inline std::vector<Point> GetPoints()
+    {
         if (!m_points.size())
             GeneratePoints();
 
@@ -146,10 +142,3 @@ private:
 
     void GeneratePoints();
 };
-
-Point operator+(Point lhs, Point const& rhs);
-Point operator-(Point lhs, Point const& rhs);
-Point operator-(Point lhs);
-Point operator*(int64_t lhs, Point const& rhs);
-Point operator*(Point const& lhs, int64_t rhs);
-Point& operator+=(Point& lhs, Point const& rhs);

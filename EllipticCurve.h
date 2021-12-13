@@ -1,10 +1,11 @@
 #pragma once
 
-#define ASSERT_NOT_REACHED __builtin_unreachable()
-
+#include <cassert>
 #include <cstdint>
 #include <ostream>
 #include <vector>
+
+#define ASSERT_NOT_REACHED assert(false)
 
 struct Coordinate {
     // Homogeneous coordinate of a point
@@ -117,6 +118,7 @@ public:
 private:
     Coordinate m_coord;
 
+    bool IsOnCurve();
     void CheckValidity();
 };
 

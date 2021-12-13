@@ -20,14 +20,19 @@ void EllipticCurve::GeneratePoints()
     }
 }
 
-void Point::CheckValidity()
+bool Point::IsOnCurve()
 {
     auto y2 = Modexp(GetY(), 2, GetField());
-    auto x = GetX();
-    auto value = (x * (x * x + GetA()) + GetB()) % GetField();
+    auto val = GetX() * (Modexp(GetX(), 2, GetField()) + GetA()) + GetB();
 
-    if (y2 != value)
-        ASSERT_NOT_REACHED;
+    val %= GetField();
+
+    return y2 == val;
+}
+
+void Point::CheckValidity()
+{
+    assert(IsOnCurve());
 }
 
 Point operator-(Point const& rhs)
@@ -85,21 +90,14 @@ Point& Point::operator+=(Point const& rhs)
     auto yn = lambda * Modsub(lx, xn, field);
     yn = Modsub(yn, ly, field);
 
-    xn %= field;
-    yn %= field;
-
     // Check if on curve
-    auto y2 = Modexp(yn, 2, field);
-    auto val = xn * (Modexp(xn, 2, field) + GetA()) + GetB();
-
-    val %= field;
-
-    if (y2 != val)
-        return Point::set_point_at_infinity(*this);
 
     m_coord = Coordinate { xn, yn };
 
-    return *this;
+    if (IsOnCurve())
+        return *this;
+
+    return Point::set_point_at_infinity(*this);
 }
 
 Point& Point::operator-=(Point const& rhs)

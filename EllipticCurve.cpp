@@ -3,7 +3,7 @@
 
 #include <iostream>
 
-void EllipticCurve::GeneratePoints()
+void EllipticCurve::generate_points()
 {
     for (auto y = 0; y < m_field; y++) {
         // Find quadratic residue in Fm
@@ -20,68 +20,63 @@ void EllipticCurve::GeneratePoints()
     }
 }
 
-bool Point::IsOnCurve()
+bool Point::is_on_curve()
 {
-    if (GetW() == 0)
+    if (get_w() == 0)
         return true;
 
-    auto y2 = Modexp(GetY(), 2, GetField());
-    auto val = GetX() * (Modexp(GetX(), 2, GetField()) + GetA()) + GetB();
+    auto y2 = Modexp(get_y(), 2, get_field());
+    auto val = get_x() * (Modexp(get_x(), 2, get_field()) + get_a()) + get_b();
 
-    val %= GetField();
+    val %= get_field();
 
     return y2 == val;
 }
 
-void Point::CheckValidity()
-{
-    assert(IsOnCurve());
-}
+void Point::check_validity() { assert(is_on_curve()); }
 
 Point operator-(Point const& rhs)
 {
     auto result = rhs;
 
-    result.m_coord.m_y = rhs.GetField() - rhs.GetY();
+    result.m_coord.m_y = rhs.get_field() - rhs.get_y();
 
     return result;
 }
 
 Point& Point::operator+=(Point const& rhs)
 {
-    if (*this ^= rhs) {
-        *this = Point(Coordinate { 0, 0, 2 }, 0, 0, 0);
-        return *this;
-    }
+    if (*this ^= rhs)
+        ASSERT_NOT_REACHED;
 
     // If both points are inf, return inf
-    if (GetW() == 0 && rhs.GetW() == 0)
+    if (get_w() == 0 && rhs.get_w() == 0)
         return Point::set_point_at_infinity(*this);
 
     // If either are points at infinity, then return the other
-    if (GetW() == 0) {
+    if (get_w() == 0) {
         *this = rhs;
         return *this;
     }
 
-    if (rhs.GetW() == 0)
+    if (rhs.get_w() == 0)
         return *this;
 
     // Given points L, R on E(F_p), if L.x == R.x return inf
-    if (*this != rhs && GetX() == rhs.GetX())
+    if (*this != rhs && get_x() == rhs.get_x())
         return Point::set_point_at_infinity(*this);
 
     auto lambda = 0ull;
-    auto const field = GetField();
+    auto const field = get_field();
 
-    auto const lx = GetX();
-    auto const ly = GetY();
+    auto const lx = get_x();
+    auto const ly = get_y();
 
-    auto const rx = rhs.GetX();
-    auto const ry = rhs.GetY();
+    auto const rx = rhs.get_x();
+    auto const ry = rhs.get_y();
 
     if (*this == rhs) // Point doubling
-        lambda = (3 * (lx * lx) + GetA()) * Modinv(2 * ly, field);
+        lambda = (3 * (lx * lx) + get_a()) * Modinv(2 * ly, field);
     else
         lambda = Modsub(ry, ly, field) * Modinv(Modsub(rx, lx, field), field);
 
@@ -97,7 +92,7 @@ Point& Point::operator+=(Point const& rhs)
 
     m_coord = Coordinate { xn, yn };
 
-    if (IsOnCurve())
+    if (is_on_curve())
         return *this;
 
     return Point::set_point_at_infinity(*this);
@@ -105,7 +100,7 @@ Point& Point::operator+=(Point const& rhs)
 
 Point& Point::operator-=(Point const& rhs)
 {
-    if (rhs.GetW() == 0)
+    if (rhs.get_w() == 0)
         return *this;
 
     return *this += -rhs;
@@ -195,20 +190,17 @@ inline bool Point::operator==(Point const& rhs)
     if (*this ^= rhs)
         return false;
 
-    if (GetW() == 0 && rhs.GetW() == 0)
+    if (get_w() == 0 && rhs.get_w() == 0)
         return true;
 
-    return (GetX() == rhs.GetX()) && (GetY() == rhs.GetY());
+    return (get_x() == rhs.get_x()) && (get_y() == rhs.get_y());
 }
 inline bool Point::operator!=(Point const& rhs) { return !(*this == rhs); }
 
 std::ostream& operator<<(std::ostream& stream, Point const& point)
 {
-    if (point.GetW() == 0)
+    if (point.get_w() == 0)
         return stream << "inf";
 
-    if (point.GetW() == 2)
-        return stream << "err";
-
-    return stream << "(" << point.GetX() << ", " << point.GetY() << ")";
+    return stream << "(" << point.get_x() << ", " << point.get_y() << ")";
 }

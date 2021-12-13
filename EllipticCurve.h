@@ -11,7 +11,7 @@ struct Coordinate {
     // Homogeneous coordinate of a point
     uint64_t m_x;
     uint64_t m_y;
-    uint64_t m_w = 1;
+    bool m_w = 1; // w is 0 for point at infinity; 1 otherwise
 };
 
 class EllipticCurve;
@@ -26,9 +26,9 @@ public:
     {
     }
 
-    inline uint64_t GetField() const { return m_field; };
-    inline uint64_t GetA() const { return m_a; };
-    inline uint64_t GetB() const { return m_b; };
+    inline uint64_t get_field() const { return m_field; };
+    inline uint64_t get_a() const { return m_a; };
+    inline uint64_t get_b() const { return m_b; };
 
     inline friend bool operator==(Curve const& lhs, Curve const& rhs)
     {
@@ -52,28 +52,28 @@ public:
         : m_coord(Coordinate(x, y))
         , Curve(a, b, field)
     {
-        CheckValidity();
+        check_validity();
     }
 
     Point(uint64_t x, uint64_t y, Curve const& curve)
         : m_coord(Coordinate(x, y))
         , Curve(curve)
     {
-        CheckValidity();
+        check_validity();
     }
 
     Point(Coordinate coord, uint64_t a, uint64_t b, uint64_t field)
         : m_coord(coord)
         , Curve(a, b, field)
     {
-        CheckValidity();
+        check_validity();
     }
 
     Point(Coordinate coord, Curve const& curve)
         : m_coord(coord)
         , Curve(curve)
     {
-        CheckValidity();
+        check_validity();
     }
 
     template <typename T>
@@ -88,14 +88,12 @@ public:
         return point;
     }
 
-    uint64_t GetX() const { return m_coord.m_x; }
-    uint64_t GetY() const { return m_coord.m_y; }
+    uint64_t get_x() const { return m_coord.m_x; }
+    uint64_t get_y() const { return m_coord.m_y; }
 
-    // The point at infinity is represented with homogeneous coordinate of w=0
-    // Points on the curve have w=1
-    // For purposes of errors we have w=2
-    uint64_t GetW() const { return m_coord.m_w; }
-    Coordinate GetCoordinate() const { return m_coord; }
+    // The point at infinity is represented with homogeneous coordinate of w=0; and w=1 otherwise
+    bool get_w() const { return m_coord.m_w; }
+    Coordinate get_coordinate() const { return m_coord; }
 
     Point& operator+=(Point const& rhs);
     Point& operator-=(Point const& rhs);
@@ -118,8 +116,8 @@ public:
 private:
     Coordinate m_coord;
 
-    bool IsOnCurve();
-    void CheckValidity();
+    bool is_on_curve();
+    void check_validity();
 };
 
 class EllipticCurve : public Curve {
@@ -131,10 +129,10 @@ public:
     {
     }
 
-    inline std::vector<Point> GetPoints()
+    inline std::vector<Point> get_points()
     {
         if (!m_points.size())
-            GeneratePoints();
+            generate_points();
 
         return m_points;
     };
@@ -142,5 +140,5 @@ public:
 private:
     std::vector<Point> m_points;
 
-    void GeneratePoints();
+    void generate_points();
 };

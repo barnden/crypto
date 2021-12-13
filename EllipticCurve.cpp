@@ -22,6 +22,9 @@ void EllipticCurve::GeneratePoints()
 
 bool Point::IsOnCurve()
 {
+    if (GetW() == 0)
+        return true;
+
     auto y2 = Modexp(GetY(), 2, GetField());
     auto val = GetX() * (Modexp(GetX(), 2, GetField()) + GetA()) + GetB();
 
@@ -191,6 +194,9 @@ inline bool Point::operator==(Point const& rhs)
 {
     if (*this ^= rhs)
         return false;
+
+    if (GetW() == 0 && rhs.GetW() == 0)
+        return true;
 
     return (GetX() == rhs.GetX()) && (GetY() == rhs.GetY());
 }

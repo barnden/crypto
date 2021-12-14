@@ -3,7 +3,9 @@
 
 uint64_t gcd(uint64_t a, uint64_t b)
 {
-    // Return (a, b); assume b > a
+    // TODO: Implement binary gcd for faster (?) computations
+    // On my system I've found binary gcd to be slower than just Euclid's
+    // for relatively small (~2bn) integers. Maybe something wrong with my impl?
     if (a == 0)
         return b;
 
@@ -15,10 +17,28 @@ uint64_t Totient(uint64_t n)
     // Return Euler Totient Function of n
     auto accumulator = 1ull;
 
+    if (n == 1)
+        return accumulator;
+
     // Totient(p) = p - 1, where p prime.
     // Check if number is prime
     if (n > 41 && n % 2 && !MillerRabin(n))
         return n - 1;
+
+    /** Optimization:
+     * Totient(p^q) = (p - 1)p^(q - 1)
+     * For p = 2, Totient(2^q) = 2^(q-1)
+     * Using multiplicity of Euler's Totient Function:
+     * Totient(2^q * r)
+     *  = Totient(2^q) * Totient(r)
+     *  = 2^(q-1) * Totient(r)
+     *  = (1 << q - 1) * Totient(r)
+    */
+
+    auto k = __builtin_ctzll(n);
+
+    if (k)
+        return (1 << (k - 1)) * Totient(n >> k);
 
     for (auto i = 2; i < n; i++)
         if (gcd(i, n) == 1)
@@ -163,7 +183,7 @@ bool MillerRabin(uint64_t n)
     auto static constexpr bases = std::integer_sequence<uint64_t, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41> {};
     bool composite = false;
 
-    [&]<std::size_t... I>(std::index_sequence<I...>)
+    [&]<std::size_t... I>(std::integer_sequence<uint64_t, I...>)
     {
         ([&](std::size_t base) {
             if (composite)

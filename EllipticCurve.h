@@ -99,10 +99,10 @@ public:
     Point& operator-=(Point const& rhs);
     Point& operator*=(int64_t rhs);
 
-    Point operator+(Point const& rhs);
-    Point operator-(Point const& rhs);
+    Point operator+(Point const& rhs) const;
+    Point operator-(Point const& rhs) const;
+    Point operator-() const;
 
-    friend Point operator-(Point const& rhs);
     friend Point operator*(int64_t lhs, Point const& rhs);
     friend Point operator*(Point const& lhs, int64_t rhs);
 

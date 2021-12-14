@@ -1,8 +1,6 @@
 #include "EllipticCurve.h"
 #include "Modmath.h"
 
-#include <iostream>
-
 void EllipticCurve::generate_points()
 {
     for (auto y = 0; y < m_field; y++) {
@@ -35,11 +33,11 @@ bool Point::is_on_curve()
 
 void Point::check_validity() { assert(is_on_curve()); }
 
-Point operator-(Point const& rhs)
+Point Point::operator-() const
 {
-    auto result = rhs;
+    auto result = Point { *this };
 
-    result.m_coord.m_y = rhs.get_field() - rhs.get_y();
+    result.m_coord.m_y = get_field() - get_y();
 
     return result;
 }
@@ -106,16 +104,16 @@ Point& Point::operator-=(Point const& rhs)
     return *this += -rhs;
 }
 
-Point Point::operator+(Point const& rhs)
+Point Point::operator+(Point const& rhs) const
 {
-    auto result = *this;
+    auto result = Point { *this };
 
     return result += rhs;
 }
 
-Point Point::operator-(Point const& rhs)
+Point Point::operator-(Point const& rhs) const
 {
-    auto result = *this;
+    auto result = Point { *this };
 
     return result -= rhs;
 }

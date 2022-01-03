@@ -5,7 +5,7 @@
 #include <utility>
 #include <vector>
 
-template<typename T>
+template <typename T>
 concept Numeric = std::convertible_to<T, std::size_t>;
 
 template <Numeric T, size_t R>
@@ -57,13 +57,17 @@ private:
     size_t static constexpr base = get_base<base_t, radix>();
 
     // Multiplication algorithms
-    friend void naive_multiplication(BigInt& a, BigInt const& b); // O(n^2)
-    friend void karatsuba(BigInt const& a, BigInt const& b, BigInt& r); // O(n^1.58)
+    friend BigInt naive_multiplication(BigInt const& a, BigInt const& b); // O(n^2)
+    friend BigInt karatsuba(BigInt const& a, BigInt const& b); // O(n^1.58)
+
+    // Division algorithms
+    friend BigInt knuth(BigInt const& a, BigInt const& b); // O(n^2)
 
 public:
     BigInt();
     BigInt(uint64_t value);
     BigInt(std::string number);
+    BigInt(std::vector<base_t> group);
 
     BigInt& operator+=(BigInt const& rhs);
     BigInt& operator-=(BigInt const& rhs);

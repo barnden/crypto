@@ -3,23 +3,85 @@
 #include <iostream>
 #include <stdexcept>
 
+template <Numeric base_t, Numeric acc_t>
+std::vector<base_t> naive_multiplication(std::vector<base_t> const& x, acc_t y)
+{
+    auto z = std::vector<base_t>(x.size() + 2);
+    auto carry = acc_t {};
+    auto static constexpr offset = sizeof(base_t) * 8;
+
+    for (auto i = 0; i < x.size(); i++) {
+        auto product = static_cast<acc_t>(x[i]) * y + z[i];
+
+        z[i] = static_cast<base_t>(product);
+        z[i + 1] = product >> offset;
+    }
+
+    return z;
+}
+
+template <Numeric base_t, Numeric acc_t>
+std::vector<base_t> naive_multiplication(std::vector<base_t> const& x, std::vector<base_t> const& y)
+{
+    if (y.size() == 1)
+        return naive_multiplication<base_t, acc_t>(x, y.back());
+
+    auto z = std::vector<base_t>(x.size() + y.size() + 1);
+    auto carry = acc_t {};
+    auto static constexpr offset = sizeof(base_t) * 8;
+
+    for (auto i = 0; i < x.size(); i++) {
+        carry = 0;
+
+        for (auto j = 0, k = i; j < y.size(); j++, k++) {
+            auto product = static_cast<acc_t>(x[i]) * static_cast<acc_t>(y[j]) + z[k] + carry;
+
+            z[k] = static_cast<base_t>(product);
+            carry = product >> offset;
+        }
+
+        z[i + y.size()] = carry;
+    }
+
+    return z;
+}
+
+template <Numeric base_t, Numeric acc_t>
+std::vector<base_t> naive_muladd(std::vector<base_t> const& x, acc_t mul, acc_t add)
+{
+    auto z = naive_multiplication<base_t, acc_t>(x, mul);
+    auto static constexpr offset = sizeof(base_t) * 8;
+
+    auto carry = add;
+    for (auto i = 0; i < z.size(); i++) {
+        auto sum = static_cast<acc_t>(z[i]) + carry;
+        z[i] = static_cast<base_t>(sum);
+        carry = sum >> offset;
+    }
+
+    return z;
+}
+
 BigInt::BigInt()
     : m_negative(false)
 {
+    m_group.push_back(0);
 }
 
 BigInt::BigInt(uint64_t number)
     : m_negative(false)
 {
+    auto static constexpr offset = sizeof(base_t) * 8;
+
     if (number < 0) {
         m_negative = true;
         number *= -1;
     }
 
     while (number) {
-        m_group.push_back(number % base);
+        m_group.push_back(static_cast<base_t>(number));
 
-        number /= base;
+        number >>= offset;
     }
 }
 
@@ -65,6 +127,22 @@ BigInt::BigInt(std::string number)
         if (num || !m_group.size())
             m_group.push_back(num);
     }
+
+    auto z = std::vector<base_t> {};
+
+    for (auto git = m_group.rbegin(); git != m_group.rend(); git++)
+        z = naive_muladd<base_t, acc_t>(z, base, *git);
+
+    m_group = z;
+
+    emsmallen();
+}
+
+BigInt::BigInt(std::vector<base_t> group)
+    : m_group(group)
+    , m_negative(false)
+{
+    emsmallen();
 }
 
 void BigInt::embiggen(BigInt const& other)
@@ -193,33 +271,21 @@ BigInt& BigInt::operator+=(BigInt const& rhs)
     return *this;
 }
 
-void naive_multiplication(BigInt& a, BigInt const& b)
+BigInt naive_multiplication(BigInt const& a, BigInt const& b)
 {
-    using acc_t = BigInt::acc_t;
-    using base_t = BigInt::base_t;
-    size_t static const constexpr offset = sizeof(base_t) * 8;
+    return { naive_multiplication<BigInt::base_t, BigInt::acc_t>(a.m_group, b.m_group) };
+}
 
-    auto const& x = a.m_group;
-    auto const& y = b.m_group;
+BigInt knuth(BigInt const& a, BigInt const& b)
+{
+    // Impl. of Knuth's Algorithm D
+    return BigInt { 0 };
+}
 
-    auto z = std::vector<base_t>(x.size() + y.size() + 1);
-    auto carry = acc_t {};
-
-    for (auto i = 0; i < x.size(); i++) {
-        carry = 0;
-
-        for (auto j = 0, k = i; j < y.size(); j++, k++) {
-            auto product = static_cast<acc_t>(x[i]) * static_cast<acc_t>(y[j]) + z[k] + carry;
-
-            z[k] = product % BigInt::base;
-            carry = product / BigInt::base;
-        }
-
-        z[i + y.size()] = carry;
-    }
-
-    a.m_group = z;
-    a.emsmallen();
+BigInt knuth_remainder(BigInt const& a, BigInt const& b)
+{
+    // Get remainder after division
+    return BigInt { 0 };
 }
 
 BigInt& BigInt::operator*=(BigInt const& rhs)
@@ -228,7 +294,9 @@ BigInt& BigInt::operator*=(BigInt const& rhs)
     // TODO: Implement Karatsuba and Toom-k
 
     m_negative ^= rhs.m_negative;
-    naive_multiplication(*this, rhs);
+    auto r = naive_multiplication(*this, rhs);
+
+    m_group = r.m_group;
 
     return *this;
 }
@@ -353,6 +421,9 @@ bool BigInt::operator>(BigInt const& rhs) const { return (*this <=> rhs) > 0; }
 
 std::ostream& operator<<(std::ostream& stream, BigInt const& number)
 {
+    using base_t = BigInt::base_t;
+    using acc_t = BigInt::acc_t;
+
     auto const& group = number.m_group;
     auto size = group.size();
 
@@ -365,17 +436,47 @@ std::ostream& operator<<(std::ostream& stream, BigInt const& number)
     if (size == 1)
         return stream << group[0];
 
-    auto i = size - 1;
+    auto muladd10 = [&](std::vector<base_t> x, acc_t mul, acc_t add) -> std::vector<base_t> {
+        auto z = std::vector<base_t>(number.m_group.size());
+        auto static constexpr base = BigInt::base;
 
-    while (group[i] == 0)
+        for (auto i = 0; i < x.size(); i++) {
+            auto product = static_cast<acc_t>(x[i]) * mul + z[i];
+
+            z[i] = product % base;
+            z[i + 1] = product / base;
+        }
+
+        auto carry = add;
+        for (auto i = 0; i < z.size(); i++) {
+            auto sum = static_cast<acc_t>(z[i]) + carry;
+
+            z[i] = sum % base;
+            carry = sum / base;
+        }
+
+        return z;
+    };
+
+    auto z = std::vector<base_t> {};
+
+    for (auto git = number.m_group.rbegin(); git != number.m_group.rend(); git++)
+        z = muladd10(z, 1ull << 32, *git);
+
+    while (z.back() == 0 && z.size() > 1)
+        z.pop_back();
+
+    auto i = z.size() - 1;
+
+    while (z[i] == 0)
         if (__builtin_sub_overflow_p(i--, 1, i))
             return stream << 0;
 
-    auto it = group.rbegin() + (size - i - 1);
+    auto it = z.rbegin() + (z.size() - i - 1);
 
     stream << *it++;
 
-    for (; it != group.rend(); it++)
+    for (; it != z.rend(); it++)
         if (*it)
             stream << *it;
 

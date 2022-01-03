@@ -28,6 +28,8 @@ BigInt::BigInt(std::string number)
     m_group.reserve((number.size() / digits) + 1);
     m_negative = number[0] == '-';
 
+    bool skip_first = m_negative || number[0] == '+';
+
     // Ignore all spaces, commas, single quotes
     [&]<char... I>(std::integer_sequence<char, I...>)
     {
@@ -41,7 +43,7 @@ BigInt::BigInt(std::string number)
     (std::integer_sequence<char, ',', ' ', '\''> {});
 
     auto size = number.size();
-    while (size > m_negative) {
+    while (size > skip_first) {
         auto place = 1ull;
         auto num = base_t {};
         auto stop = size - digits;
@@ -71,9 +73,19 @@ void BigInt::embiggen(BigInt const& other)
     if (m_group.size() > other.m_group.size())
         return;
 
-    m_group.reserve(other.m_group.size() + 1);
+    embiggen(other.m_group.size() + 1);
+}
 
-    for (auto i = 0; i <= (other.m_group.size() - m_group.size() + 1); i++)
+void BigInt::embiggen(size_t size)
+{
+    if (m_group.size() > size)
+        return;
+
+    auto sz = m_group.size();
+
+    m_group.reserve(size);
+
+    for (auto i = 0; i <= size - sz; i++)
         m_group.push_back(0);
 }
 
@@ -98,6 +110,7 @@ BigInt& BigInt::operator-=(BigInt const& rhs)
 {
     if (rhs.m_negative)
         return *this += -rhs;
+
     embiggen(rhs);
 
     auto lit = m_group.begin();
@@ -106,7 +119,7 @@ BigInt& BigInt::operator-=(BigInt const& rhs)
     auto rit = std::as_const(rhs.m_group).begin();
     auto const& rend = rhs.m_group.end();
 
-    int64_t sum = 0;
+    auto sum = acc_t {};
     while (lit != lend || rit != rend) {
         if (lit != lend) {
             sum += *lit;
@@ -156,7 +169,7 @@ BigInt& BigInt::operator+=(BigInt const& rhs)
     auto rit = std::as_const(rhs.m_group).begin();
     auto const& rend = rhs.m_group.end();
 
-    auto sum = 0ul;
+    auto sum = acc_t {};
     while (lit != lend || rit != rend) {
         if (lit != lend) {
             sum += *lit;
@@ -178,6 +191,96 @@ BigInt& BigInt::operator+=(BigInt const& rhs)
     emsmallen();
 
     return *this;
+}
+
+void naive_multiplication(BigInt& a, BigInt const& b)
+{
+    using acc_t = BigInt::acc_t;
+    using base_t = BigInt::base_t;
+    size_t static const constexpr offset = sizeof(base_t) * 8;
+
+    auto const& x = a.m_group;
+    auto const& y = b.m_group;
+
+    auto z = std::vector<base_t>(x.size() + y.size() + 1);
+    auto carry = acc_t {};
+
+    for (auto i = 0; i < x.size(); i++) {
+        carry = 0;
+
+        for (auto j = 0, k = i; j < y.size(); j++, k++) {
+            auto product = static_cast<acc_t>(x[i]) * static_cast<acc_t>(y[j]) + z[k] + carry;
+
+            z[k] = product % BigInt::base;
+            carry = product / BigInt::base;
+        }
+
+        z[i + y.size()] = carry;
+    }
+
+    a.m_group = z;
+    a.emsmallen();
+}
+
+BigInt& BigInt::operator*=(BigInt const& rhs)
+{
+    // Perform multiplication
+    // TODO: Implement Karatsuba and Toom-k
+
+    m_negative ^= rhs.m_negative;
+    naive_multiplication(*this, rhs);
+
+    return *this;
+}
+
+BigInt& BigInt::operator<<=(int rhs)
+{
+    if (rhs == 0)
+        return *this;
+
+    if (rhs < 0)
+        return *this >>= -rhs;
+
+    // TODO: Implement then use multiplication by integer primitive
+    BigInt r;
+
+    if (rhs < 63)
+        r = { 1ull << rhs };
+    else {
+        // TODO: There has to be a smarter way
+        r = { 1ull };
+
+        for (auto i = 0; i < rhs; i++)
+            r += r;
+    }
+
+    return *this *= r;
+}
+
+BigInt& BigInt::operator>>=(int rhs)
+{
+    // TODO: Study Knuth's division algorithm
+
+    if (rhs == 0)
+        return *this;
+
+    if (rhs < 0)
+        return *this <<= -rhs;
+
+    return *this;
+}
+
+BigInt BigInt::operator<<(int rhs) const
+{
+    auto result = *this;
+
+    if (rhs == 0)
+        return result;
+
+    if (rhs < 0)
+        return result >>= -rhs;
+
+    return result <<= rhs;
 }
 
 BigInt BigInt::operator+(BigInt const& rhs) const

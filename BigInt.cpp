@@ -211,8 +211,8 @@ BigInt& BigInt::operator-=(BigInt const& rhs)
             sum = 0;
             m_negative = true;
         } else {
-            *std::prev(lit) = sum % base;
-            sum /= base;
+            *std::prev(lit) = static_cast<base_t>(sum);
+            sum >>= base_sz;
 
             if (sum != 0)
                 m_negative = false;
@@ -256,8 +256,8 @@ BigInt& BigInt::operator+=(BigInt const& rhs)
             rit++;
         }
 
-        *std::prev(lit) = sum % base;
-        sum /= base;
+        *std::prev(lit) = static_cast<base_t>(sum);
+        sum >>= base_sz;
     }
 
     if (sum)

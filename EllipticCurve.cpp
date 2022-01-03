@@ -44,8 +44,7 @@ Point Point::operator-() const
 
 Point& Point::operator+=(Point const& rhs)
 {
-    if (*this ^= rhs)
-        ASSERT_NOT_REACHED;
+    assert(*this ^= rhs);
 
     // If both points are inf, return inf
     if (get_w() == 0 && rhs.get_w() == 0)

@@ -8,13 +8,12 @@ std::vector<base_t> naive_multiplication(std::vector<base_t> const& x, acc_t y)
 {
     auto z = std::vector<base_t>(x.size() + 2);
     auto carry = acc_t {};
-    auto static constexpr offset = sizeof(base_t) * 8;
 
     for (auto i = 0; i < x.size(); i++) {
         auto product = static_cast<acc_t>(x[i]) * y + z[i];
 
         z[i] = static_cast<base_t>(product);
-        z[i + 1] = product >> offset;
+        z[i + 1] = product >> BigInt::base_sz;
     }
 
     return z;
@@ -28,7 +27,6 @@ std::vector<base_t> naive_multiplication(std::vector<base_t> const& x, std::vect
 
     auto z = std::vector<base_t>(x.size() + y.size() + 1);
     auto carry = acc_t {};
-    auto static constexpr offset = sizeof(base_t) * 8;
 
     for (auto i = 0; i < x.size(); i++) {
         carry = 0;
@@ -37,7 +35,7 @@ std::vector<base_t> naive_multiplication(std::vector<base_t> const& x, std::vect
             auto product = static_cast<acc_t>(x[i]) * static_cast<acc_t>(y[j]) + z[k] + carry;
 
             z[k] = static_cast<base_t>(product);
-            carry = product >> offset;
+            carry = product >> BigInt::base_sz;
         }
 
         z[i + y.size()] = carry;
@@ -50,13 +48,12 @@ template <Numeric base_t, Numeric acc_t>
 std::vector<base_t> naive_muladd(std::vector<base_t> const& x, acc_t mul, acc_t add)
 {
     auto z = naive_multiplication<base_t, acc_t>(x, mul);
-    auto static constexpr offset = sizeof(base_t) * 8;
 
     auto carry = add;
     for (auto i = 0; i < z.size(); i++) {
         auto sum = static_cast<acc_t>(z[i]) + carry;
         z[i] = static_cast<base_t>(sum);
-        carry = sum >> offset;
+        carry = sum >> BigInt::base_sz;
     }
 
     return z;
@@ -271,11 +268,6 @@ BigInt& BigInt::operator+=(BigInt const& rhs)
     return *this;
 }
 
-BigInt naive_multiplication(BigInt const& a, BigInt const& b)
-{
-    return { naive_multiplication<BigInt::base_t, BigInt::acc_t>(a.m_group, b.m_group) };
-}
-
 BigInt knuth(BigInt const& a, BigInt const& b)
 {
     // Impl. of Knuth's Algorithm D
@@ -294,9 +286,22 @@ BigInt& BigInt::operator*=(BigInt const& rhs)
     // TODO: Implement Karatsuba and Toom-k
 
     m_negative ^= rhs.m_negative;
-    auto r = naive_multiplication(*this, rhs);
+    m_group = naive_multiplication<base_t, acc_t>(m_group, rhs.m_group);
 
-    m_group = r.m_group;
+    emsmallen();
+
+    return *this;
+}
+
+BigInt& BigInt::operator*=(int rhs) {
+    if (rhs < 0) {
+        m_negative ^= 1;
+        rhs *= -1;
+    }
+
+    m_group = naive_multiplication<base_t, acc_t>(m_group, rhs);
+
+    emsmallen();
 
     return *this;
 }
@@ -309,12 +314,11 @@ BigInt& BigInt::operator<<=(int rhs)
     if (rhs < 0)
         return *this >>= -rhs;
 
-    auto static constexpr base_size = sizeof(base_t) * 8;
-    auto new_groups = rhs / base_size;
+    auto new_groups = rhs / base_sz;
     auto z = std::vector<base_t>(new_groups);
     z.insert(z.end(), m_group.begin(), m_group.end());
 
-    m_group = naive_multiplication<base_t, acc_t>(z, 1ull << (rhs % base_size));
+    m_group = naive_multiplication<base_t, acc_t>(z, 1ull << (rhs % base_sz));
 
     emsmallen();
 
@@ -432,7 +436,7 @@ std::ostream& operator<<(std::ostream& stream, BigInt const& number)
     if (size == 1)
         return stream << group[0];
 
-    auto muladd10 = [&](std::vector<base_t> x, acc_t mul, acc_t add) -> std::vector<base_t> {
+    auto static muladd10 = [&](std::vector<base_t> x, acc_t mul, acc_t add) -> std::vector<base_t> {
         auto z = std::vector<base_t>(2 * number.m_group.size() + 1);
         auto static constexpr base = BigInt::base;
 
@@ -457,7 +461,7 @@ std::ostream& operator<<(std::ostream& stream, BigInt const& number)
     auto z = std::vector<base_t> {};
 
     for (auto git = number.m_group.rbegin(); git != number.m_group.rend(); git++)
-        z = muladd10(z, 1ull << 32, *git);
+        z = muladd10(z, 1ull << BigInt::base_sz, *git);
 
     while (z.back() == 0 && z.size() > 1)
         z.pop_back();

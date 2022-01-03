@@ -55,9 +55,12 @@ private:
     size_t static constexpr radix = 10;
     size_t static constexpr digits = get_max_digits<base_t, radix>();
     size_t static constexpr base = get_base<base_t, radix>();
+    size_t static constexpr base_sz = sizeof(base_t) * 8;
 
     // Multiplication algorithms
-    friend BigInt naive_multiplication(BigInt const& a, BigInt const& b); // O(n^2)
+    template <Numeric T, Numeric U> friend std::vector<T> naive_multiplication(std::vector<T> const& x, U y); // O(n^2)
+    template <Numeric T, Numeric U> friend std::vector<T> naive_multiplication(std::vector<T> const& x, std::vector<T> const& y); // O(n^2)
+    template <Numeric T, Numeric U> friend std::vector<T> naive_muladd(std::vector<T> const& x, U mul, U add); // O(n^2)
     friend BigInt karatsuba(BigInt const& a, BigInt const& b); // O(n^1.58)
 
     // Division algorithms
@@ -73,6 +76,8 @@ public:
     BigInt& operator-=(BigInt const& rhs);
     BigInt& operator*=(BigInt const& lhs);
     BigInt& operator/=(BigInt const& rhs);
+
+    BigInt& operator*=(int rhs);
 
     BigInt operator+(BigInt const& rhs) const;
     BigInt operator-(BigInt const& rhs) const;

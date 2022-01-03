@@ -309,20 +309,16 @@ BigInt& BigInt::operator<<=(int rhs)
     if (rhs < 0)
         return *this >>= -rhs;
 
-    // TODO: Implement then use multiplication by integer primitive
-    BigInt r;
+    auto static constexpr base_size = sizeof(base_t) * 8;
+    auto new_groups = rhs / base_size;
+    auto z = std::vector<base_t>(new_groups);
+    z.insert(z.end(), m_group.begin(), m_group.end());
 
-    if (rhs < 63)
-        r = { 1ull << rhs };
-    else {
-        // TODO: There has to be a smarter way
-        r = { 1ull };
+    m_group = naive_multiplication<base_t, acc_t>(z, 1ull << (rhs % base_size));
 
-        for (auto i = 0; i < rhs; i++)
-            r += r;
-    }
+    emsmallen();
 
-    return *this *= r;
+    return *this;
 }
 
 BigInt& BigInt::operator>>=(int rhs)
@@ -437,7 +433,7 @@ std::ostream& operator<<(std::ostream& stream, BigInt const& number)
         return stream << group[0];
 
     auto muladd10 = [&](std::vector<base_t> x, acc_t mul, acc_t add) -> std::vector<base_t> {
-        auto z = std::vector<base_t>(number.m_group.size());
+        auto z = std::vector<base_t>(2 * number.m_group.size() + 1);
         auto static constexpr base = BigInt::base;
 
         for (auto i = 0; i < x.size(); i++) {

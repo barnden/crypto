@@ -6,18 +6,18 @@
 void BigInt::embiggen(BigInt const& other)
 {
     // Pad m_groups to be other.m_groups.size + 1
-    if (m_groups.size() > other.m_groups.size())
+    if (groups() > other.groups())
         return;
 
-    embiggen(other.m_groups.size() + 1);
+    embiggen(other.groups() + 1);
 }
 
 void BigInt::embiggen(size_t size)
 {
-    if (m_groups.size() > size)
+    if (groups() > size)
         return;
 
-    for (auto i = 0; i <= size - m_groups.size(); i++)
+    for (auto i = 0; i <= size - groups(); i++)
         m_groups.push_back(0);
 }
 
@@ -30,90 +30,97 @@ inline void emsmallen(std::deque<uint32_t>& groups)
 
 [[gnu::flatten]] inline void BigInt::emsmallen() { ::emsmallen(m_groups); }
 
-std::deque<uint32_t> naive_multiplication(std::deque<uint32_t> const& x, uint64_t y)
+BigInt naive_multiplication(BigInt const& x, uint64_t y)
 {
-    auto z = std::deque<uint32_t>(x.size() + 2);
+    auto z = std::deque<uint32_t>(x.groups() + 2);
     auto carry = uint64_t {};
 
-    for (auto i = 0; i < x.size(); i++) {
-        auto product = static_cast<uint64_t>(x[i]) * y + z[i];
+    for (auto i = 0; i < x.groups(); i++) {
+        auto product = static_cast<uint64_t>(x.m_groups[i]) * y + z[i];
 
         z[i] = static_cast<uint32_t>(product);
         z[i + 1] = product >> 32;
     }
 
-    return z;
+    emsmallen(z);
+
+    return { z };
 }
 
-std::deque<uint32_t> naive_multiplication(std::deque<uint32_t> const& x, std::deque<uint32_t> const& y)
+BigInt naive_multiplication(BigInt const& x, BigInt const& y)
 {
-    if (y.size() == 1)
-        return naive_multiplication(x, y.back());
+    if (y.groups() == 1)
+        return naive_multiplication(x, y.m_groups.back());
 
-    auto z = std::deque<uint32_t>(x.size() + y.size() + 1);
+    auto z = std::deque<uint32_t>(x.groups() + y.groups() + 1);
     auto carry = uint64_t {};
 
-    for (auto i = 0; i < x.size(); i++) {
+    for (auto i = 0; i < x.groups(); i++) {
         carry = 0;
 
-        for (auto j = 0, k = i; j < y.size(); j++, k++) {
-            auto product = static_cast<uint64_t>(x[i]) * static_cast<uint64_t>(y[j]) + z[k] + carry;
+        for (auto j = 0, k = i; j < y.groups(); j++, k++) {
+            auto product = static_cast<uint64_t>(x.m_groups[i]) * static_cast<uint64_t>(y.m_groups[j]) + z[k] + carry;
 
             z[k] = static_cast<uint32_t>(product);
             carry = product >> 32;
         }
 
-        z[i + y.size()] = carry;
+        z[i + y.groups()] = carry;
     }
 
-    return z;
+    emsmallen(z);
+
+    return { z };
 }
 
-std::deque<uint32_t> naive_muladd(std::deque<uint32_t> const& x, uint64_t mul, uint64_t add)
+BigInt naive_muladd(BigInt const& x, uint64_t mul, uint64_t add)
 {
     auto z = naive_multiplication(x, mul);
 
     auto carry = add;
-    for (auto i = 0; i < z.size(); i++) {
-        auto sum = static_cast<uint64_t>(z[i]) + carry;
-        z[i] = static_cast<uint32_t>(sum);
+    for (auto i = 0; i < z.groups(); i++) {
+        auto sum = static_cast<uint64_t>(z.m_groups[i]) + carry;
+        z.m_groups[i] = static_cast<uint32_t>(sum);
         carry = sum >> 32;
     }
+
+    if (carry)
+        z.m_groups.push_back(carry);
 
     return z;
 }
 
-std::deque<uint32_t> knuth(std::deque<uint32_t> const& x, uint64_t y, bool remainder)
+BigInt knuth(BigInt const& x, uint64_t y, bool remainder)
 {
-    auto Q = std::deque<uint32_t>(x.size());
+    auto Q = std::deque<uint32_t>(x.groups());
     auto k = uint64_t {};
 
-    for (auto j = x.size(); j-- > 0;) {
-        uint64_t t = (k << 32) + x[j];
+    for (auto j = x.groups(); j-- > 0;) {
+        uint64_t t = (k << 32) + x.m_groups[j];
         Q[j] = t / y;
         k = t - Q[j] * y;
     }
 
     if (remainder)
-        return { static_cast<uint32_t>(k), static_cast<uint32_t>(k >> 32) };
+        return BigInt(std::deque<uint32_t> { static_cast<uint32_t>(k), static_cast<uint32_t>(k >> 32) });
 
-    return Q;
+    return BigInt { Q };
 }
 
-std::deque<uint32_t> knuth(std::deque<uint32_t> const& x, std::deque<uint32_t> const& y, bool remainder)
+BigInt knuth(BigInt const& x, BigInt const& y, bool remainder)
 {
     // The Art of Computer Programming Vol. 2 Seminumerical Algorithms 3rd ed. pg. 284
     // Hacker's Delight divmnu64.c
 
-    if (y.size() == 1)
-        return knuth(x, y[0], remainder);
+    if (y.groups() == 1)
+        return knuth(x, y.m_groups[0], remainder);
 
     auto static constexpr B = 1ull << 32;
-    auto Q = std::deque<uint32_t>(x.size());
-    auto S = __builtin_clz(y.back());
+    auto Q = std::deque<uint32_t>(x.groups());
+    auto S = __builtin_clz(y.m_groups.back());
     auto D = B >> S;
-    auto U = naive_multiplication(x, D);
-    auto V = naive_multiplication(y, D);
+    auto U = naive_multiplication(x, D).m_groups;
+    auto V = naive_multiplication(y, D).m_groups;
 
     emsmallen(U);
     emsmallen(V);
@@ -163,12 +170,11 @@ std::deque<uint32_t> knuth(std::deque<uint32_t> const& x, std::deque<uint32_t> c
     }
 
     if (remainder)
-        for (auto i = 0; i < n - 1; i++)
-            Q[i] = (Q[i] >> S) | static_cast<uint64_t>(Q[i + 1] << (32 - S));
+        return BigInt { Q } >>= S;
 
     emsmallen(Q);
 
-    return Q;
+    return { Q };
 }
 
 BigInt::BigInt()
@@ -236,12 +242,12 @@ BigInt::BigInt(std::string number)
             m_groups.push_back(num);
     }
 
-    auto z = std::deque<uint32_t> {};
+    auto z = BigInt {};
 
     for (auto git = m_groups.rbegin(); git != m_groups.rend(); git++)
         z = naive_muladd(z, base, *git);
 
-    m_groups = z;
+    m_groups = z.m_groups;
 
     emsmallen();
 }
@@ -256,7 +262,7 @@ BigInt::BigInt(std::deque<uint32_t> group)
 size_t BigInt::size() const
 {
     // Get size of number in bits
-    return ((m_groups.size() - 1) * 32) + (32 - __builtin_clz(m_groups.back()));
+    return ((groups() - 1) * 32) + (32 - __builtin_clz(m_groups.back()));
 }
 
 BigInt& BigInt::operator-=(BigInt const& rhs)
@@ -352,7 +358,7 @@ BigInt& BigInt::operator*=(BigInt const& rhs)
     // TODO: Implement Karatsuba and Toom-k
 
     m_negative ^= rhs.m_negative;
-    m_groups = naive_multiplication(m_groups, rhs.m_groups);
+    m_groups = naive_multiplication(*this, rhs).m_groups;
 
     emsmallen();
 
@@ -362,7 +368,7 @@ BigInt& BigInt::operator*=(BigInt const& rhs)
 BigInt& BigInt::operator/=(BigInt const& rhs)
 {
     m_negative ^= rhs.m_negative;
-    m_groups = knuth(m_groups, rhs.m_groups, false);
+    m_groups = knuth(*this, rhs, false).m_groups;
 
     emsmallen();
 
@@ -376,7 +382,7 @@ BigInt& BigInt::operator*=(int rhs)
         rhs *= -1;
     }
 
-    m_groups = naive_multiplication(m_groups, rhs);
+    m_groups = naive_multiplication(*this, rhs).m_groups;
 
     emsmallen();
 

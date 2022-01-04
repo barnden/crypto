@@ -75,10 +75,11 @@ public:
     BigInt operator>>(int rhs) const;
 
     size_t size() const;
+    inline size_t groups() const { return m_groups.size(); };
 
     friend std::ostream& operator<<(std::ostream& stream, BigInt const& number);
 
-    inline std::deque<uint32_t> const& groups() const { return m_groups; }
+    inline std::deque<uint32_t> const& get_groups() const { return m_groups; }
     inline bool is_negative() const { return m_negative; }
 
 private:
@@ -98,12 +99,12 @@ private:
     size_t static constexpr base_sz = sizeof(uint32_t) * 8;
 
     // Multiplication algorithms
-    friend std::deque<uint32_t> naive_multiplication(std::deque<uint32_t> const& x, uint64_t y); // O(n^2)
-    friend std::deque<uint32_t> naive_multiplication(std::deque<uint32_t> const& x, std::deque<uint32_t> const& y); // O(n^2)
-    friend std::deque<uint32_t> naive_muladd(std::deque<uint32_t> const& x, uint64_t mul, uint64_t add); // O(n^2)
+    friend BigInt naive_multiplication(BigInt const& x, uint64_t y); // O(n^2)
+    friend BigInt naive_multiplication(BigInt const& x, BigInt const& y); // O(n^2)
+    friend BigInt naive_muladd(BigInt const& x, uint64_t mul, uint64_t add); // O(n^2)
     friend BigInt karatsuba(BigInt const& a, BigInt const& b); // O(n^1.58)
 
     // Division algorithms
-    friend std::deque<uint32_t> knuth(std::deque<uint32_t> const& x, uint64_t y, bool remainder); // O(n^2)
-    friend std::deque<uint32_t> knuth(std::deque<uint32_t> const& x, std::deque<uint32_t> const& y, bool remainder); // O(n^2)
+    friend BigInt knuth(BigInt const& x, uint64_t y, bool remainder); // O(n^2)
+    friend BigInt knuth(BigInt const& x, BigInt const& y, bool remainder); // O(n^2)
 };

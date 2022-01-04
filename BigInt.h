@@ -52,25 +52,28 @@ public:
     BigInt& operator/=(BigInt const& rhs);
     BigInt& operator%=(BigInt const& rhs);
 
-    template <Numeric T>
-    BigInt& operator*=(T rhs);
-    template <Numeric T>
-    BigInt& operator/=(T rhs);
-    template <Numeric T>
-    BigInt& operator%=(T rhs);
+    BigInt& operator*=(int rhs);
+    BigInt& operator/=(int rhs);
+    BigInt& operator%=(int rhs);
+
+    BigInt& operator*=(uint64_t rhs);
+    BigInt& operator/=(uint64_t rhs);
+    BigInt& operator%=(uint64_t rhs);
 
     BigInt operator+(BigInt const& rhs) const;
     BigInt operator-(BigInt const& rhs) const;
     BigInt operator-() const;
     BigInt operator*(BigInt const& rhs) const;
     BigInt operator/(BigInt const& rhs) const;
+    BigInt operator%(BigInt const& rhs) const;
 
-    template <Numeric T>
-    BigInt operator*(T rhs) const;
-    template <Numeric T>
-    BigInt operator/(T rhs) const;
-    template <Numeric T>
-    BigInt operator%(T rhs) const;
+    BigInt operator*(int rhs) const;
+    BigInt operator/(int rhs) const;
+    BigInt operator%(int rhs) const;
+
+    BigInt operator*(uint64_t rhs) const;
+    BigInt operator/(uint64_t rhs) const;
+    BigInt operator%(uint64_t rhs) const;
 
     bool operator==(BigInt const& rhs) const;
     bool operator!=(BigInt const& rhs) const;
@@ -93,6 +96,8 @@ public:
 
     inline std::deque<uint32_t> const& get_groups() const { return m_groups; }
     inline bool is_negative() const { return m_negative; }
+    size_t trailing_zeros() const;
+    bool is_power_of_two() const;
 
 private:
     std::deque<uint32_t> m_groups;

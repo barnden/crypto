@@ -3,6 +3,28 @@
 #include <iostream>
 #include <stdexcept>
 
+size_t BigInt::trailing_zeros() const
+{
+    auto i = 0uz;
+
+    for (; i < m_groups.size(); i++)
+        if (m_groups[i] != 0)
+            break;
+
+    return (32 * i) + __builtin_ctz(m_groups[i]);
+}
+
+size_t BigInt::size() const
+{
+    // Get size of number in bits
+    return ((groups() - 1) * 32) + (32 - __builtin_clz(m_groups.back()));
+}
+
+bool BigInt::is_power_of_two() const
+{
+    return trailing_zeros() == size() - 1;
+}
+
 void BigInt::embiggen(BigInt const& other)
 {
     // Pad m_groups to be other.m_groups.size + 1
@@ -259,12 +281,6 @@ BigInt::BigInt(std::deque<uint32_t> group)
     emsmallen();
 }
 
-size_t BigInt::size() const
-{
-    // Get size of number in bits
-    return ((groups() - 1) * 32) + (32 - __builtin_clz(m_groups.back()));
-}
-
 BigInt& BigInt::operator-=(BigInt const& rhs)
 {
     if (rhs.m_negative)
@@ -365,14 +381,18 @@ BigInt& BigInt::operator*=(BigInt const& rhs)
     return *this;
 }
 
-template <Numeric T>
-BigInt& BigInt::operator*=(T rhs)
+BigInt& BigInt::operator*=(int rhs)
 {
     if (rhs < 0) {
         m_negative ^= 1;
         rhs *= -1;
     }
 
+    return *this *= static_cast<uint64_t>(rhs);
+}
+
+BigInt& BigInt::operator*=(uint64_t rhs)
+{
     m_groups = naive_multiplication(*this, rhs).m_groups;
 
     emsmallen();
@@ -381,9 +401,8 @@ BigInt& BigInt::operator*=(T rhs)
 }
 
 BigInt BigInt::operator*(BigInt const& rhs) const { return BigInt { *this } *= rhs; }
-
-template <Numeric T>
-BigInt BigInt::operator*(T rhs) const { return BigInt { *this } *= rhs; }
+BigInt BigInt::operator*(int rhs) const { return BigInt { *this } *= rhs; }
+BigInt BigInt::operator*(uint64_t rhs) const { return BigInt { *this } *= rhs; }
 
 BigInt& BigInt::operator/=(BigInt const& rhs)
 {
@@ -395,14 +414,18 @@ BigInt& BigInt::operator/=(BigInt const& rhs)
     return *this;
 }
 
-template <Numeric T>
-BigInt& BigInt::operator/=(T rhs)
+BigInt& BigInt::operator/=(int rhs)
 {
     if (rhs < 0) {
         m_negative ^= 1;
         rhs *= -1;
     }
 
+    return *this /= static_cast<uint64_t>(rhs);
+}
+
+BigInt& BigInt::operator/=(uint64_t rhs)
+{
     m_groups = knuth(*this, rhs, false).m_groups;
 
     emsmallen();
@@ -411,9 +434,47 @@ BigInt& BigInt::operator/=(T rhs)
 }
 
 BigInt BigInt::operator/(BigInt const& rhs) const { return BigInt { *this } /= rhs; }
+BigInt BigInt::operator/(int rhs) const { return BigInt { *this } /= rhs; }
+BigInt BigInt::operator/(uint64_t rhs) const { return BigInt { *this } /= rhs; }
 
-template <Numeric T>
-BigInt BigInt::operator/(T rhs) const { return BigInt { *this } /= rhs; }
+BigInt& BigInt::operator%=(BigInt const& rhs)
+{
+    if (rhs.m_negative)
+        throw new std::runtime_error("[BigInt] Negative modulus");
+
+    m_groups = knuth(*this, rhs, true).m_groups;
+
+    if (m_negative)
+        *this += rhs;
+
+    emsmallen();
+
+    return *this;
+}
+
+BigInt& BigInt::operator%=(int rhs)
+{
+    if (rhs < 0)
+        throw new std::runtime_error("[BigInt] Negative modulus");
+
+    return *this %= static_cast<uint64_t>(rhs);
+}
+
+BigInt& BigInt::operator%=(uint64_t rhs)
+{
+    m_groups = knuth(*this, rhs, true).m_groups;
+
+    if (m_negative)
+        *this += rhs;
+
+    emsmallen();
+
+    return *this;
+}
+
+BigInt BigInt::operator%(BigInt const& rhs) const { return BigInt { *this } %= rhs; }
+BigInt BigInt::operator%(int rhs) const { return BigInt { *this } %= rhs; }
+BigInt BigInt::operator%(uint64_t rhs) const { return BigInt { *this } %= rhs; }
 
 BigInt& BigInt::operator<<=(int rhs)
 {

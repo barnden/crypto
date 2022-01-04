@@ -134,15 +134,30 @@ BigInt knuth(BigInt const& x, BigInt const& y, bool remainder)
     // The Art of Computer Programming Vol. 2 Seminumerical Algorithms 3rd ed. pg. 284
     // Hacker's Delight divmnu64.c
 
+    if (y.abs() == 0)
+        throw new std::runtime_error("[BigInt] Div by 0.");
+
     if (y.groups() == 1)
         return knuth(x, y.m_groups[0], remainder);
 
-    auto static constexpr B = 1ull << 32;
+    if (x.abs() < y.abs()) {
+        if (remainder)
+            return x;
+
+        return { 0 };
+    }
+
+    if (x.abs() == y.abs()) {
+        if (remainder)
+            return { 0 };
+
+        return { 1 };
+    }
+
     auto Q = std::deque<uint32_t>(x.groups());
     auto S = __builtin_clz(y.m_groups.back());
-    auto D = B >> S;
-    auto U = naive_multiplication(x, D).m_groups;
-    auto V = naive_multiplication(y, D).m_groups;
+    auto U = (x << S).m_groups;
+    auto V = (y << S).m_groups;
 
     emsmallen(U);
     emsmallen(V);
@@ -150,25 +165,25 @@ BigInt knuth(BigInt const& x, BigInt const& y, bool remainder)
     U.push_back(0); // |U| = m + n + 1
 
     auto n = V.size();
-    auto m = U.size() - n;
+    auto m = U.size() - n - 1;
 
     for (auto j = m; j-- > 0;) {
-        auto qhat = ((static_cast<uint64_t>(U[n + j]) << 32) ^ U[n + j - 1]) / V[n - 1];
-        auto rhat = ((static_cast<uint64_t>(U[n + j]) << 32) ^ U[n + j - 1]) % V[n - 1];
+        auto qhat = ((static_cast<uint64_t>(U[n + j]) << 32) | U[n + j - 1]) / V.back();
+        auto rhat = ((static_cast<uint64_t>(U[n + j]) << 32) | U[n + j - 1]) % V.back();
 
-        while (qhat >= B || qhat * V[n - 2] > ((rhat << 32) ^ U[n + j - 2])) {
+        while (qhat >> 32 || qhat * V[n - 2] > ((rhat << 32) | U[n + j - 2])) {
             qhat--;
-            rhat += V[n - 1];
+            rhat += V.back();
 
-            if (rhat >= B)
+            if (!(rhat >> 32))
                 break;
         }
 
-        auto k = uint64_t {};
-        auto t = uint64_t {};
+        auto k = int64_t {};
+        auto t = int64_t {};
         for (auto i = 0; i < n; i++) {
             auto p = qhat * V[i];
-            t = U[i + j] - k - static_cast<int64_t>(p);
+            t = static_cast<int64_t>(U[i + j]) - static_cast<uint32_t>(p) - k;
             U[i + j] = t;
             k = (p >> 32) - (t >> 32);
         }
@@ -183,7 +198,7 @@ BigInt knuth(BigInt const& x, BigInt const& y, bool remainder)
 
             for (auto i = 0; i < n; i++) {
                 t = static_cast<uint64_t>(U[i + j]) + V[i] + k;
-                U[i + j] = t;
+                U[i + j] = static_cast<uint32_t>(t);
                 k = t >> 32;
             }
 
@@ -192,7 +207,7 @@ BigInt knuth(BigInt const& x, BigInt const& y, bool remainder)
     }
 
     if (remainder)
-        return BigInt { Q } >>= S;
+        return BigInt { U } >> S;
 
     emsmallen(Q);
 
@@ -215,10 +230,15 @@ BigInt::BigInt(uint64_t number)
         number *= -1;
     }
 
-    while (number) {
-        m_groups.push_back(static_cast<uint32_t>(number));
+    if (number == 0) {
+        m_groups.push_back(0);
+    } else {
 
-        number >>= offset;
+        while (number) {
+            m_groups.push_back(static_cast<uint32_t>(number));
+
+            number >>= offset;
+        }
     }
 }
 
@@ -520,6 +540,14 @@ BigInt& BigInt::operator>>=(int rhs)
     }
 
     auto groups = rhs / 32;
+
+    if (groups > m_groups.size()) {
+        m_groups.clear();
+        m_groups.push_back(0);
+
+        return *this;
+    }
+
     for (auto i = 0; i < groups; i++)
         m_groups.pop_front();
 
@@ -532,6 +560,19 @@ BigInt& BigInt::operator>>=(int rhs)
     emsmallen();
 
     return *this;
+}
+
+BigInt BigInt::operator>>(int rhs) const
+{
+    auto result = *this;
+
+    if (rhs == 0)
+        return result;
+
+    if (rhs < 0)
+        return result <<= -rhs;
+
+    return result >>= rhs;
 }
 
 BigInt BigInt::operator<<(int rhs) const

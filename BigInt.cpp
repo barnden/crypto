@@ -365,16 +365,6 @@ BigInt& BigInt::operator*=(BigInt const& rhs)
     return *this;
 }
 
-BigInt& BigInt::operator/=(BigInt const& rhs)
-{
-    m_negative ^= rhs.m_negative;
-    m_groups = knuth(*this, rhs, false).m_groups;
-
-    emsmallen();
-
-    return *this;
-}
-
 BigInt& BigInt::operator*=(int rhs)
 {
     if (rhs < 0) {
@@ -388,6 +378,38 @@ BigInt& BigInt::operator*=(int rhs)
 
     return *this;
 }
+
+BigInt BigInt::operator*(BigInt const& rhs) const { return BigInt { *this } *= rhs; }
+
+BigInt BigInt::operator*(int rhs) const { return BigInt { *this } *= rhs; }
+
+BigInt& BigInt::operator/=(BigInt const& rhs)
+{
+    m_negative ^= rhs.m_negative;
+    m_groups = knuth(*this, rhs, false).m_groups;
+
+    emsmallen();
+
+    return *this;
+}
+
+BigInt& BigInt::operator/=(int rhs)
+{
+    if (rhs < 0) {
+        m_negative ^= 1;
+        rhs *= -1;
+    }
+
+    m_groups = knuth(*this, rhs, false).m_groups;
+
+    emsmallen();
+
+    return *this;
+}
+
+BigInt BigInt::operator/(BigInt const& rhs) const { return BigInt { *this } /= rhs; }
+
+BigInt BigInt::operator/(int rhs) const { return BigInt { *this } /= rhs; }
 
 BigInt& BigInt::operator<<=(int rhs)
 {

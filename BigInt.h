@@ -56,9 +56,14 @@ public:
     BigInt& operator/=(int rhs);
     BigInt& operator%=(int rhs);
 
+
     BigInt operator+(BigInt const& rhs) const;
     BigInt operator-(BigInt const& rhs) const;
     BigInt operator-() const;
+    BigInt operator*(BigInt const& rhs) const;
+    BigInt operator/(BigInt const& rhs) const;
+    BigInt operator*(int rhs) const;
+    BigInt operator/(int rhs) const;
 
     bool operator==(BigInt const& rhs) const;
     bool operator!=(BigInt const& rhs) const;

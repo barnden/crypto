@@ -59,6 +59,21 @@ std::vector<base_t> naive_muladd(std::vector<base_t> const& x, acc_t mul, acc_t 
     return z;
 }
 
+template <Numeric base_t, Numeric acc_t>
+std::vector<base_t> knuth(std::vector<base_t> const& x, acc_t y)
+{
+    auto Q = std::vector<base_t>(x.size());
+    auto k = acc_t {};
+
+    for (auto j = x.size(); j-- > 0;) {
+        acc_t t = (k << BigInt::base_sz) + x[j];
+        Q[j] = t / y;
+        k = t - Q[j] * y;
+    }
+
+    return Q;
+}
+
 BigInt::BigInt()
     : m_negative(false)
 {
@@ -268,18 +283,6 @@ BigInt& BigInt::operator+=(BigInt const& rhs)
     return *this;
 }
 
-BigInt knuth(BigInt const& a, BigInt const& b)
-{
-    // Impl. of Knuth's Algorithm D
-    return BigInt { 0 };
-}
-
-BigInt knuth_remainder(BigInt const& a, BigInt const& b)
-{
-    // Get remainder after division
-    return BigInt { 0 };
-}
-
 BigInt& BigInt::operator*=(BigInt const& rhs)
 {
     // Perform multiplication
@@ -293,7 +296,18 @@ BigInt& BigInt::operator*=(BigInt const& rhs)
     return *this;
 }
 
-BigInt& BigInt::operator*=(int rhs) {
+BigInt& BigInt::operator/=(BigInt const& rhs)
+{
+    m_negative ^= rhs.m_negative;
+    m_group = knuth<base_t, acc_t>(m_group, rhs.m_group);
+
+    emsmallen();
+
+    return *this;
+}
+
+BigInt& BigInt::operator*=(int rhs)
+{
     if (rhs < 0) {
         m_negative ^= 1;
         rhs *= -1;

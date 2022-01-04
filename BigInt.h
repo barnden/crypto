@@ -64,6 +64,8 @@ private:
     friend BigInt karatsuba(BigInt const& a, BigInt const& b); // O(n^1.58)
 
     // Division algorithms
+    template <Numeric T, Numeric U> friend std::vector<T> knuth(std::vector<T> const& x, U y); // O(n^2)
+    template <Numeric T, Numeric U> friend std::vector<T> knuth(std::vector<T> const& x, std::vector<T> const& y); // O(n^2)
     friend BigInt knuth(BigInt const& a, BigInt const& b); // O(n^2)
 
 public:

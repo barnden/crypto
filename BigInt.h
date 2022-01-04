@@ -50,8 +50,11 @@ public:
     BigInt& operator-=(BigInt const& rhs);
     BigInt& operator*=(BigInt const& lhs);
     BigInt& operator/=(BigInt const& rhs);
+    BigInt& operator%=(BigInt const& rhs);
 
     BigInt& operator*=(int rhs);
+    BigInt& operator/=(int rhs);
+    BigInt& operator%=(int rhs);
 
     BigInt operator+(BigInt const& rhs) const;
     BigInt operator-(BigInt const& rhs) const;
@@ -65,7 +68,6 @@ public:
     bool operator<(BigInt const& rhs) const;
     bool operator>(BigInt const& rhs) const;
 
-    // TODO: Implement bitshift operators
     BigInt& operator<<=(int rhs);
     BigInt& operator>>=(int rhs);
 
@@ -102,7 +104,6 @@ private:
     friend BigInt karatsuba(BigInt const& a, BigInt const& b); // O(n^1.58)
 
     // Division algorithms
-    friend std::vector<uint32_t> knuth(std::vector<uint32_t> const& x, uint64_t y); // O(n^2)
-    friend std::vector<uint32_t> knuth(std::vector<uint32_t> const& x, std::vector<uint32_t> const& y); // O(n^2)
-    friend BigInt knuth(BigInt const& a, BigInt const& b); // O(n^2)
+    friend std::vector<uint32_t> knuth(std::vector<uint32_t> const& x, uint64_t y, bool remainder); // O(n^2)
+    friend std::vector<uint32_t> knuth(std::vector<uint32_t> const& x, std::vector<uint32_t> const& y, bool remainder); // O(n^2)
 };

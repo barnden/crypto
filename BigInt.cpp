@@ -87,7 +87,7 @@ std::vector<uint32_t> naive_muladd(std::vector<uint32_t> const& x, uint64_t mul,
     return z;
 }
 
-std::vector<uint32_t> knuth(std::vector<uint32_t> const& x, uint64_t y)
+std::vector<uint32_t> knuth(std::vector<uint32_t> const& x, uint64_t y, bool remainder)
 {
     auto Q = std::vector<uint32_t>(x.size());
     auto k = uint64_t {};
@@ -98,21 +98,24 @@ std::vector<uint32_t> knuth(std::vector<uint32_t> const& x, uint64_t y)
         k = t - Q[j] * y;
     }
 
+    if (remainder)
+        return { static_cast<uint32_t>(k), static_cast<uint32_t>(k >> 32) };
+
     return Q;
 }
 
-std::vector<uint32_t> knuth(std::vector<uint32_t> const& x, std::vector<uint32_t> const& y)
+std::vector<uint32_t> knuth(std::vector<uint32_t> const& x, std::vector<uint32_t> const& y, bool remainder)
 {
     // The Art of Computer Programming Vol. 2 Seminumerical Algorithms 3rd ed. pg. 284
     // Hacker's Delight divmnu64.c
 
     if (y.size() == 1)
-        return knuth(x, y[0]);
+        return knuth(x, y[0], remainder);
 
-    auto B = 1ull << 32;
+    auto static constexpr B = 1ull << 32;
     auto Q = std::vector<uint32_t>(x.size());
-    auto D = B >> __builtin_clz(y.back());
-    // auto D = 1ull << (32 - __builtin_clz(y.back()));
+    auto S = __builtin_clz(y.back());
+    auto D = B >> S;
     auto U = naive_multiplication(x, D);
     auto V = naive_multiplication(y, D);
 
@@ -125,10 +128,10 @@ std::vector<uint32_t> knuth(std::vector<uint32_t> const& x, std::vector<uint32_t
     auto m = U.size() - n;
 
     for (auto j = m; j-- > 0;) {
-        auto qhat = (static_cast<uint64_t>(U[n + j]) << 32) + U[n + j - 1] / V[n - 1];
-        auto rhat = (static_cast<uint64_t>(U[n + j]) << 32) + U[n + j - 1] % V[n - 1];
+        auto qhat = ((static_cast<uint64_t>(U[n + j]) << 32) ^ U[n + j - 1]) / V[n - 1];
+        auto rhat = ((static_cast<uint64_t>(U[n + j]) << 32) ^ U[n + j - 1]) % V[n - 1];
 
-        while (qhat >= B || qhat * V[n - 2] > ((rhat << 32) + U[n + j - 2])) {
+        while (qhat >= B || qhat * V[n - 2] > ((rhat << 32) ^ U[n + j - 2])) {
             qhat--;
             rhat += V[n - 1];
 
@@ -162,6 +165,12 @@ std::vector<uint32_t> knuth(std::vector<uint32_t> const& x, std::vector<uint32_t
             U[n + j] += k;
         }
     }
+
+    if (remainder)
+        for (auto i = 0; i < n-1; i++)
+            Q[i] = (Q[i] >> S) | static_cast<uint64_t>(Q[i + 1] << (32 - S));
+
+    emsmallen(Q);
 
     return Q;
 }
@@ -362,7 +371,7 @@ BigInt& BigInt::operator*=(BigInt const& rhs)
 BigInt& BigInt::operator/=(BigInt const& rhs)
 {
     m_negative ^= rhs.m_negative;
-    m_groups = knuth(m_groups, rhs.m_groups);
+    m_groups = knuth(m_groups, rhs.m_groups, false);
 
     emsmallen();
 
@@ -404,8 +413,6 @@ BigInt& BigInt::operator<<=(int rhs)
 
 BigInt& BigInt::operator>>=(int rhs)
 {
-    // TODO: Study Knuth's division algorithm
-
     if (rhs == 0)
         return *this;
 

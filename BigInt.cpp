@@ -25,6 +25,22 @@ bool BigInt::is_power_of_two() const
     return trailing_zeros() == size() - 1;
 }
 
+bool BigInt::bit_at(size_t n) const
+{
+    auto const& group = m_groups[n / 32];
+
+    return group & (1ul << (n % 32));
+}
+
+BigInt BigInt::abs() const
+{
+    auto ret = *this;
+
+    ret.m_negative = false;
+
+    return ret;
+}
+
 void BigInt::embiggen(BigInt const& other)
 {
     // Pad m_groups to be other.m_groups.size + 1
@@ -46,6 +62,12 @@ void BigInt::embiggen(size_t size)
 inline void emsmallen(std::deque<uint32_t>& groups)
 {
     // Remove all leading digit groups valued at 0, except for the last one
+    if (groups.size() == 0) {
+        groups.push_back(0);
+        std::cout << "SHOULD NOT HAPPEN\n";
+        return;
+    }
+
     while (groups.back() == 0 && groups.size() > 1)
         groups.pop_back();
 }
@@ -165,7 +187,7 @@ BigInt knuth(BigInt const& x, BigInt const& y, bool remainder)
     U.push_back(0); // |U| = m + n + 1
 
     auto n = V.size();
-    auto m = U.size() - n - 1;
+    auto m = U.size() - n;
 
     for (auto j = m; j-- > 0;) {
         auto qhat = ((static_cast<uint64_t>(U[n + j]) << 32) | U[n + j - 1]) / V.back();
@@ -193,12 +215,12 @@ BigInt knuth(BigInt const& x, BigInt const& y, bool remainder)
 
         Q[j] = qhat;
         if (t < 0) {
-            Q[j] = Q[j] - 1;
+            Q[j]--;
             k = 0;
 
             for (auto i = 0; i < n; i++) {
                 t = static_cast<uint64_t>(U[i + j]) + V[i] + k;
-                U[i + j] = static_cast<uint32_t>(t);
+                U[i + j] = t;
                 k = t >> 32;
             }
 

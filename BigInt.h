@@ -98,6 +98,8 @@ public:
     inline bool is_negative() const { return m_negative; }
     size_t trailing_zeros() const;
     bool is_power_of_two() const;
+    bool bit_at(size_t n) const;
+    BigInt abs() const;
 
 private:
     std::deque<uint32_t> m_groups;

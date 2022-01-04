@@ -1,9 +1,9 @@
 #pragma once
 
 #include <cstdint>
+#include <deque>
 #include <string>
 #include <utility>
-#include <deque>
 
 template <typename T>
 concept Numeric = std::convertible_to<T, std::size_t>;
@@ -52,18 +52,25 @@ public:
     BigInt& operator/=(BigInt const& rhs);
     BigInt& operator%=(BigInt const& rhs);
 
-    BigInt& operator*=(int rhs);
-    BigInt& operator/=(int rhs);
-    BigInt& operator%=(int rhs);
-
+    template <Numeric T>
+    BigInt& operator*=(T rhs);
+    template <Numeric T>
+    BigInt& operator/=(T rhs);
+    template <Numeric T>
+    BigInt& operator%=(T rhs);
 
     BigInt operator+(BigInt const& rhs) const;
     BigInt operator-(BigInt const& rhs) const;
     BigInt operator-() const;
     BigInt operator*(BigInt const& rhs) const;
     BigInt operator/(BigInt const& rhs) const;
-    BigInt operator*(int rhs) const;
-    BigInt operator/(int rhs) const;
+
+    template <Numeric T>
+    BigInt operator*(T rhs) const;
+    template <Numeric T>
+    BigInt operator/(T rhs) const;
+    template <Numeric T>
+    BigInt operator%(T rhs) const;
 
     bool operator==(BigInt const& rhs) const;
     bool operator!=(BigInt const& rhs) const;

@@ -365,7 +365,8 @@ BigInt& BigInt::operator*=(BigInt const& rhs)
     return *this;
 }
 
-BigInt& BigInt::operator*=(int rhs)
+template <Numeric T>
+BigInt& BigInt::operator*=(T rhs)
 {
     if (rhs < 0) {
         m_negative ^= 1;
@@ -381,7 +382,8 @@ BigInt& BigInt::operator*=(int rhs)
 
 BigInt BigInt::operator*(BigInt const& rhs) const { return BigInt { *this } *= rhs; }
 
-BigInt BigInt::operator*(int rhs) const { return BigInt { *this } *= rhs; }
+template <Numeric T>
+BigInt BigInt::operator*(T rhs) const { return BigInt { *this } *= rhs; }
 
 BigInt& BigInt::operator/=(BigInt const& rhs)
 {
@@ -393,7 +395,8 @@ BigInt& BigInt::operator/=(BigInt const& rhs)
     return *this;
 }
 
-BigInt& BigInt::operator/=(int rhs)
+template <Numeric T>
+BigInt& BigInt::operator/=(T rhs)
 {
     if (rhs < 0) {
         m_negative ^= 1;
@@ -409,7 +412,8 @@ BigInt& BigInt::operator/=(int rhs)
 
 BigInt BigInt::operator/(BigInt const& rhs) const { return BigInt { *this } /= rhs; }
 
-BigInt BigInt::operator/(int rhs) const { return BigInt { *this } /= rhs; }
+template <Numeric T>
+BigInt BigInt::operator/(T rhs) const { return BigInt { *this } /= rhs; }
 
 BigInt& BigInt::operator<<=(int rhs)
 {

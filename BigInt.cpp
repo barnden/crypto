@@ -3,39 +3,68 @@
 #include <iostream>
 #include <stdexcept>
 
-template <Numeric base_t, Numeric acc_t>
-std::vector<base_t> naive_multiplication(std::vector<base_t> const& x, acc_t y)
+void BigInt::embiggen(BigInt const& other)
 {
-    auto z = std::vector<base_t>(x.size() + 2);
-    auto carry = acc_t {};
+    // Pad m_groups to be other.m_groups.size + 1
+    if (m_groups.size() > other.m_groups.size())
+        return;
+
+    embiggen(other.m_groups.size() + 1);
+}
+
+void BigInt::embiggen(size_t size)
+{
+    if (m_groups.size() > size)
+        return;
+
+    auto sz = m_groups.size();
+
+    m_groups.reserve(size);
+
+    for (auto i = 0; i <= size - sz; i++)
+        m_groups.push_back(0);
+}
+
+inline void emsmallen(std::vector<uint32_t>& groups)
+{
+    // Remove all leading digit groups valued at 0, except for the last one
+    while (groups.back() == 0 && groups.size() > 1)
+        groups.pop_back();
+}
+
+[[gnu::flatten]] inline void BigInt::emsmallen() { ::emsmallen(m_groups); }
+
+std::vector<uint32_t> naive_multiplication(std::vector<uint32_t> const& x, uint64_t y)
+{
+    auto z = std::vector<uint32_t>(x.size() + 2);
+    auto carry = uint64_t {};
 
     for (auto i = 0; i < x.size(); i++) {
-        auto product = static_cast<acc_t>(x[i]) * y + z[i];
+        auto product = static_cast<uint64_t>(x[i]) * y + z[i];
 
-        z[i] = static_cast<base_t>(product);
-        z[i + 1] = product >> BigInt::base_sz;
+        z[i] = static_cast<uint32_t>(product);
+        z[i + 1] = product >> 32;
     }
 
     return z;
 }
 
-template <Numeric base_t, Numeric acc_t>
-std::vector<base_t> naive_multiplication(std::vector<base_t> const& x, std::vector<base_t> const& y)
+std::vector<uint32_t> naive_multiplication(std::vector<uint32_t> const& x, std::vector<uint32_t> const& y)
 {
     if (y.size() == 1)
-        return naive_multiplication<base_t, acc_t>(x, y.back());
+        return naive_multiplication(x, y.back());
 
-    auto z = std::vector<base_t>(x.size() + y.size() + 1);
-    auto carry = acc_t {};
+    auto z = std::vector<uint32_t>(x.size() + y.size() + 1);
+    auto carry = uint64_t {};
 
     for (auto i = 0; i < x.size(); i++) {
         carry = 0;
 
         for (auto j = 0, k = i; j < y.size(); j++, k++) {
-            auto product = static_cast<acc_t>(x[i]) * static_cast<acc_t>(y[j]) + z[k] + carry;
+            auto product = static_cast<uint64_t>(x[i]) * static_cast<uint64_t>(y[j]) + z[k] + carry;
 
-            z[k] = static_cast<base_t>(product);
-            carry = product >> BigInt::base_sz;
+            z[k] = static_cast<uint32_t>(product);
+            carry = product >> 32;
         }
 
         z[i + y.size()] = carry;
@@ -44,29 +73,27 @@ std::vector<base_t> naive_multiplication(std::vector<base_t> const& x, std::vect
     return z;
 }
 
-template <Numeric base_t, Numeric acc_t>
-std::vector<base_t> naive_muladd(std::vector<base_t> const& x, acc_t mul, acc_t add)
+std::vector<uint32_t> naive_muladd(std::vector<uint32_t> const& x, uint64_t mul, uint64_t add)
 {
-    auto z = naive_multiplication<base_t, acc_t>(x, mul);
+    auto z = naive_multiplication(x, mul);
 
     auto carry = add;
     for (auto i = 0; i < z.size(); i++) {
-        auto sum = static_cast<acc_t>(z[i]) + carry;
-        z[i] = static_cast<base_t>(sum);
-        carry = sum >> BigInt::base_sz;
+        auto sum = static_cast<uint64_t>(z[i]) + carry;
+        z[i] = static_cast<uint32_t>(sum);
+        carry = sum >> 32;
     }
 
     return z;
 }
 
-template <Numeric base_t, Numeric acc_t>
-std::vector<base_t> knuth(std::vector<base_t> const& x, acc_t y)
+std::vector<uint32_t> knuth(std::vector<uint32_t> const& x, uint64_t y)
 {
-    auto Q = std::vector<base_t>(x.size());
-    auto k = acc_t {};
+    auto Q = std::vector<uint32_t>(x.size());
+    auto k = uint64_t {};
 
     for (auto j = x.size(); j-- > 0;) {
-        acc_t t = (k << BigInt::base_sz) + x[j];
+        uint64_t t = (k << 32) + x[j];
         Q[j] = t / y;
         k = t - Q[j] * y;
     }
@@ -74,23 +101,23 @@ std::vector<base_t> knuth(std::vector<base_t> const& x, acc_t y)
     return Q;
 }
 
-template <Numeric base_t, Numeric acc_t>
-std::vector<base_t> knuth(std::vector<base_t> const& x, std::vector<base_t> const& y)
+std::vector<uint32_t> knuth(std::vector<uint32_t> const& x, std::vector<uint32_t> const& y)
 {
+    // The Art of Computer Programming Vol. 2 Seminumerical Algorithms 3rd ed. pg. 284
+    // Hacker's Delight divmnu64.c
+
     if (y.size() == 1)
-        return knuth<base_t, acc_t>(x, y[0]);
+        return knuth(x, y[0]);
 
-    auto B = 1ull << BigInt::base_sz;
-    auto Q = std::vector<base_t>(x.size());
+    auto B = 1ull << 32;
+    auto Q = std::vector<uint32_t>(x.size());
     auto D = B >> __builtin_clz(y.back());
-    auto U = naive_multiplication<base_t, acc_t>(x, D);
-    auto V = naive_multiplication<base_t, acc_t>(y, D);
+    // auto D = 1ull << (32 - __builtin_clz(y.back()));
+    auto U = naive_multiplication(x, D);
+    auto V = naive_multiplication(y, D);
 
-    while (U.back() == 0 && U.size() > 1)
-        U.pop_back();
-
-    while (V.back() == 0 && V.size() > 1)
-        V.pop_back();
+    emsmallen(U);
+    emsmallen(V);
 
     U.push_back(0); // |U| = m + n + 1
 
@@ -98,10 +125,10 @@ std::vector<base_t> knuth(std::vector<base_t> const& x, std::vector<base_t> cons
     auto m = U.size() - n;
 
     for (auto j = m; j-- > 0;) {
-        auto qhat = (static_cast<acc_t>(U[n + j]) << BigInt::base_sz) + U[n + j - 1] / V[n - 1];
-        auto rhat = (static_cast<acc_t>(U[n + j]) << BigInt::base_sz) + U[n + j - 1] % V[n - 1];
+        auto qhat = (static_cast<uint64_t>(U[n + j]) << 32) + U[n + j - 1] / V[n - 1];
+        auto rhat = (static_cast<uint64_t>(U[n + j]) << 32) + U[n + j - 1] % V[n - 1];
 
-        while (qhat >= B || qhat * V[n - 2] > ((rhat << BigInt::base_sz) + U[n + j - 2])) {
+        while (qhat >= B || qhat * V[n - 2] > ((rhat << 32) + U[n + j - 2])) {
             qhat--;
             rhat += V[n - 1];
 
@@ -109,13 +136,13 @@ std::vector<base_t> knuth(std::vector<base_t> const& x, std::vector<base_t> cons
                 break;
         }
 
-        auto k = acc_t {};
-        auto t = acc_t {};
+        auto k = uint64_t {};
+        auto t = uint64_t {};
         for (auto i = 0; i < n; i++) {
             auto p = qhat * V[i];
             t = U[i + j] - k - static_cast<int64_t>(p);
             U[i + j] = t;
-            k = (p >> BigInt::base_sz) - (t >> BigInt::base_sz);
+            k = (p >> 32) - (t >> 32);
         }
 
         t = U[n + j] - k;
@@ -129,7 +156,7 @@ std::vector<base_t> knuth(std::vector<base_t> const& x, std::vector<base_t> cons
             for (auto i = 0; i < n; i++) {
                 t = static_cast<uint64_t>(U[i + j]) + V[i] + k;
                 U[i + j] = t;
-                k = t >> BigInt::base_sz;
+                k = t >> 32;
             }
 
             U[n + j] += k;
@@ -142,13 +169,13 @@ std::vector<base_t> knuth(std::vector<base_t> const& x, std::vector<base_t> cons
 BigInt::BigInt()
     : m_negative(false)
 {
-    m_group.push_back(0);
+    m_groups.push_back(0);
 }
 
 BigInt::BigInt(uint64_t number)
     : m_negative(false)
 {
-    auto static constexpr offset = sizeof(base_t) * 8;
+    auto static constexpr offset = sizeof(uint32_t) * 8;
 
     if (number < 0) {
         m_negative = true;
@@ -156,7 +183,7 @@ BigInt::BigInt(uint64_t number)
     }
 
     while (number) {
-        m_group.push_back(static_cast<base_t>(number));
+        m_groups.push_back(static_cast<uint32_t>(number));
 
         number >>= offset;
     }
@@ -164,7 +191,7 @@ BigInt::BigInt(uint64_t number)
 
 BigInt::BigInt(std::string number)
 {
-    m_group.reserve((number.size() / digits) + 1);
+    m_groups.reserve((number.size() / digits) + 1);
     m_negative = number[0] == '-';
 
     bool skip_first = m_negative || number[0] == '+';
@@ -184,7 +211,7 @@ BigInt::BigInt(std::string number)
     auto size = number.size();
     while (size > skip_first) {
         auto place = 1ull;
-        auto num = base_t {};
+        auto num = uint32_t {};
         auto stop = size - digits;
 
         if (__builtin_sub_overflow_p(size, digits, stop))
@@ -201,61 +228,32 @@ BigInt::BigInt(std::string number)
             place *= 10;
         }
 
-        if (num || !m_group.size())
-            m_group.push_back(num);
+        if (num || !m_groups.size())
+            m_groups.push_back(num);
     }
 
-    auto z = std::vector<base_t> {};
+    auto z = std::vector<uint32_t> {};
 
-    for (auto git = m_group.rbegin(); git != m_group.rend(); git++)
-        z = naive_muladd<base_t, acc_t>(z, base, *git);
+    for (auto git = m_groups.rbegin(); git != m_groups.rend(); git++)
+        z = naive_muladd(z, base, *git);
 
-    m_group = z;
+    m_groups = z;
 
     emsmallen();
 }
 
-BigInt::BigInt(std::vector<base_t> group)
-    : m_group(group)
+BigInt::BigInt(std::vector<uint32_t> group)
+    : m_groups(group)
     , m_negative(false)
 {
     emsmallen();
 }
 
-void BigInt::embiggen(BigInt const& other)
-{
-    // Pad m_group to be other.m_group.size + 1
-    if (m_group.size() > other.m_group.size())
-        return;
-
-    embiggen(other.m_group.size() + 1);
-}
-
-void BigInt::embiggen(size_t size)
-{
-    if (m_group.size() > size)
-        return;
-
-    auto sz = m_group.size();
-
-    m_group.reserve(size);
-
-    for (auto i = 0; i <= size - sz; i++)
-        m_group.push_back(0);
-}
-
-void BigInt::emsmallen()
-{
-    // Remove all leading digit groups valued at 0, except for the last one
-    while (m_group.back() == 0 && m_group.size() > 1)
-        m_group.pop_back();
-}
-
 size_t BigInt::size() const
 {
-    size_t n = digits * (m_group.size() - 1);
+    size_t n = digits * (m_groups.size() - 1);
 
-    for (auto i = m_group.back(); i > 0; i /= 10)
+    for (auto i = m_groups.back(); i > 0; i /= 10)
         n++;
 
     return n;
@@ -268,13 +266,13 @@ BigInt& BigInt::operator-=(BigInt const& rhs)
 
     embiggen(rhs);
 
-    auto lit = m_group.begin();
-    auto const& lend = m_group.end();
+    auto lit = m_groups.begin();
+    auto const& lend = m_groups.end();
 
-    auto rit = std::as_const(rhs.m_group).begin();
-    auto const& rend = rhs.m_group.end();
+    auto rit = std::as_const(rhs.m_groups).begin();
+    auto const& rend = rhs.m_groups.end();
 
-    auto sum = acc_t {};
+    auto sum = uint64_t {};
     while (lit != lend || rit != rend) {
         if (lit != lend) {
             sum += *lit;
@@ -291,8 +289,8 @@ BigInt& BigInt::operator-=(BigInt const& rhs)
             sum = 0;
             m_negative = true;
         } else {
-            *std::prev(lit) = static_cast<base_t>(sum);
-            sum >>= base_sz;
+            *std::prev(lit) = static_cast<uint32_t>(sum);
+            sum >>= 32;
 
             if (sum != 0)
                 m_negative = false;
@@ -318,13 +316,13 @@ BigInt& BigInt::operator+=(BigInt const& rhs)
 
     embiggen(rhs);
 
-    auto lit = m_group.begin();
-    auto const& lend = m_group.end();
+    auto lit = m_groups.begin();
+    auto const& lend = m_groups.end();
 
-    auto rit = std::as_const(rhs.m_group).begin();
-    auto const& rend = rhs.m_group.end();
+    auto rit = std::as_const(rhs.m_groups).begin();
+    auto const& rend = rhs.m_groups.end();
 
-    auto sum = acc_t {};
+    auto sum = uint64_t {};
     while (lit != lend || rit != rend) {
         if (lit != lend) {
             sum += *lit;
@@ -336,12 +334,12 @@ BigInt& BigInt::operator+=(BigInt const& rhs)
             rit++;
         }
 
-        *std::prev(lit) = static_cast<base_t>(sum);
-        sum >>= base_sz;
+        *std::prev(lit) = static_cast<uint32_t>(sum);
+        sum >>= 32;
     }
 
     if (sum)
-        m_group.push_back(1);
+        m_groups.push_back(1);
 
     emsmallen();
 
@@ -354,7 +352,7 @@ BigInt& BigInt::operator*=(BigInt const& rhs)
     // TODO: Implement Karatsuba and Toom-k
 
     m_negative ^= rhs.m_negative;
-    m_group = naive_multiplication<base_t, acc_t>(m_group, rhs.m_group);
+    m_groups = naive_multiplication(m_groups, rhs.m_groups);
 
     emsmallen();
 
@@ -364,7 +362,7 @@ BigInt& BigInt::operator*=(BigInt const& rhs)
 BigInt& BigInt::operator/=(BigInt const& rhs)
 {
     m_negative ^= rhs.m_negative;
-    m_group = knuth<base_t, acc_t>(m_group, rhs.m_group);
+    m_groups = knuth(m_groups, rhs.m_groups);
 
     emsmallen();
 
@@ -378,7 +376,7 @@ BigInt& BigInt::operator*=(int rhs)
         rhs *= -1;
     }
 
-    m_group = naive_multiplication<base_t, acc_t>(m_group, rhs);
+    m_groups = naive_multiplication(m_groups, rhs);
 
     emsmallen();
 
@@ -393,11 +391,11 @@ BigInt& BigInt::operator<<=(int rhs)
     if (rhs < 0)
         return *this >>= -rhs;
 
-    auto new_groups = rhs / base_sz;
-    auto z = std::vector<base_t>(new_groups);
-    z.insert(z.end(), m_group.begin(), m_group.end());
+    auto new_groups = rhs / 32;
+    auto z = std::vector<uint32_t>(new_groups);
+    z.insert(z.end(), m_groups.begin(), m_groups.end());
 
-    m_group = naive_multiplication<base_t, acc_t>(z, 1ull << (rhs % base_sz));
+    m_groups = naive_multiplication(z, 1ull << (rhs % 32));
 
     emsmallen();
 
@@ -452,11 +450,11 @@ BigInt BigInt::operator-() const
 bool BigInt::operator==(BigInt const& rhs) const
 {
     if (m_negative != rhs.m_negative
-        || m_group.size() != rhs.m_group.size()
+        || m_groups.size() != rhs.m_groups.size()
         || size() != rhs.size())
         return false;
 
-    for (auto lit = m_group.begin(), rit = rhs.m_group.begin(); lit != m_group.end(); lit++, rit++)
+    for (auto lit = m_groups.begin(), rit = rhs.m_groups.begin(); lit != m_groups.end(); lit++, rit++)
         if (*lit != *rit)
             return false;
 
@@ -476,13 +474,13 @@ int BigInt::operator<=>(BigInt const& rhs) const
     if (!m_negative && rhs.m_negative)
         return -1;
 
-    if (m_group.size() > rhs.m_group.size() || size() > rhs.size())
+    if (m_groups.size() > rhs.m_groups.size() || size() > rhs.size())
         return (m_negative && rhs.m_negative) ? -1 : 1;
 
-    if (m_group.size() < rhs.m_group.size() || size() < rhs.size())
+    if (m_groups.size() < rhs.m_groups.size() || size() < rhs.size())
         return (m_negative && rhs.m_negative) ? 1 : -1;
 
-    for (auto lit = m_group.begin(), rit = rhs.m_group.begin(); lit != m_group.end(); lit++, rit++) {
+    for (auto lit = m_groups.begin(), rit = rhs.m_groups.begin(); lit != m_groups.end(); lit++, rit++) {
         if (*lit == *rit)
             continue;
 
@@ -500,10 +498,7 @@ bool BigInt::operator>(BigInt const& rhs) const { return (*this <=> rhs) > 0; }
 
 std::ostream& operator<<(std::ostream& stream, BigInt const& number)
 {
-    using base_t = BigInt::base_t;
-    using acc_t = BigInt::acc_t;
-
-    auto const& group = number.m_group;
+    auto const& group = number.m_groups;
     auto size = group.size();
 
     if (!size)
@@ -515,12 +510,12 @@ std::ostream& operator<<(std::ostream& stream, BigInt const& number)
     if (size == 1)
         return stream << group[0];
 
-    auto static muladd10 = [&](std::vector<base_t> x, acc_t mul, acc_t add) -> std::vector<base_t> {
-        auto z = std::vector<base_t>(2 * number.m_group.size() + 1);
+    auto static muladd10 = [&](std::vector<uint32_t> x, uint64_t mul, uint64_t add) -> std::vector<uint32_t> {
+        auto z = std::vector<uint32_t>(2 * number.m_groups.size() + 1);
         auto static constexpr base = BigInt::base;
 
         for (auto i = 0; i < x.size(); i++) {
-            auto product = static_cast<acc_t>(x[i]) * mul + z[i];
+            auto product = static_cast<uint64_t>(x[i]) * mul + z[i];
 
             z[i] = product % base;
             z[i + 1] = product / base;
@@ -528,7 +523,7 @@ std::ostream& operator<<(std::ostream& stream, BigInt const& number)
 
         auto carry = add;
         for (auto i = 0; i < z.size(); i++) {
-            auto sum = static_cast<acc_t>(z[i]) + carry;
+            auto sum = static_cast<uint64_t>(z[i]) + carry;
 
             z[i] = sum % base;
             carry = sum / base;
@@ -537,10 +532,10 @@ std::ostream& operator<<(std::ostream& stream, BigInt const& number)
         return z;
     };
 
-    auto z = std::vector<base_t> {};
+    auto z = std::vector<uint32_t> {};
 
-    for (auto git = number.m_group.rbegin(); git != number.m_group.rend(); git++)
-        z = muladd10(z, 1ull << BigInt::base_sz, *git);
+    for (auto git = number.m_groups.rbegin(); git != number.m_groups.rend(); git++)
+        z = muladd10(z, 1ull << 32, *git);
 
     while (z.back() == 0 && z.size() > 1)
         z.pop_back();

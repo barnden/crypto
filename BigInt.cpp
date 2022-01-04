@@ -17,15 +17,11 @@ void BigInt::embiggen(size_t size)
     if (m_groups.size() > size)
         return;
 
-    auto sz = m_groups.size();
-
-    m_groups.reserve(size);
-
-    for (auto i = 0; i <= size - sz; i++)
+    for (auto i = 0; i <= size - m_groups.size(); i++)
         m_groups.push_back(0);
 }
 
-inline void emsmallen(std::vector<uint32_t>& groups)
+inline void emsmallen(std::deque<uint32_t>& groups)
 {
     // Remove all leading digit groups valued at 0, except for the last one
     while (groups.back() == 0 && groups.size() > 1)
@@ -34,9 +30,9 @@ inline void emsmallen(std::vector<uint32_t>& groups)
 
 [[gnu::flatten]] inline void BigInt::emsmallen() { ::emsmallen(m_groups); }
 
-std::vector<uint32_t> naive_multiplication(std::vector<uint32_t> const& x, uint64_t y)
+std::deque<uint32_t> naive_multiplication(std::deque<uint32_t> const& x, uint64_t y)
 {
-    auto z = std::vector<uint32_t>(x.size() + 2);
+    auto z = std::deque<uint32_t>(x.size() + 2);
     auto carry = uint64_t {};
 
     for (auto i = 0; i < x.size(); i++) {
@@ -49,12 +45,12 @@ std::vector<uint32_t> naive_multiplication(std::vector<uint32_t> const& x, uint6
     return z;
 }
 
-std::vector<uint32_t> naive_multiplication(std::vector<uint32_t> const& x, std::vector<uint32_t> const& y)
+std::deque<uint32_t> naive_multiplication(std::deque<uint32_t> const& x, std::deque<uint32_t> const& y)
 {
     if (y.size() == 1)
         return naive_multiplication(x, y.back());
 
-    auto z = std::vector<uint32_t>(x.size() + y.size() + 1);
+    auto z = std::deque<uint32_t>(x.size() + y.size() + 1);
     auto carry = uint64_t {};
 
     for (auto i = 0; i < x.size(); i++) {
@@ -73,7 +69,7 @@ std::vector<uint32_t> naive_multiplication(std::vector<uint32_t> const& x, std::
     return z;
 }
 
-std::vector<uint32_t> naive_muladd(std::vector<uint32_t> const& x, uint64_t mul, uint64_t add)
+std::deque<uint32_t> naive_muladd(std::deque<uint32_t> const& x, uint64_t mul, uint64_t add)
 {
     auto z = naive_multiplication(x, mul);
 
@@ -87,9 +83,9 @@ std::vector<uint32_t> naive_muladd(std::vector<uint32_t> const& x, uint64_t mul,
     return z;
 }
 
-std::vector<uint32_t> knuth(std::vector<uint32_t> const& x, uint64_t y, bool remainder)
+std::deque<uint32_t> knuth(std::deque<uint32_t> const& x, uint64_t y, bool remainder)
 {
-    auto Q = std::vector<uint32_t>(x.size());
+    auto Q = std::deque<uint32_t>(x.size());
     auto k = uint64_t {};
 
     for (auto j = x.size(); j-- > 0;) {
@@ -104,7 +100,7 @@ std::vector<uint32_t> knuth(std::vector<uint32_t> const& x, uint64_t y, bool rem
     return Q;
 }
 
-std::vector<uint32_t> knuth(std::vector<uint32_t> const& x, std::vector<uint32_t> const& y, bool remainder)
+std::deque<uint32_t> knuth(std::deque<uint32_t> const& x, std::deque<uint32_t> const& y, bool remainder)
 {
     // The Art of Computer Programming Vol. 2 Seminumerical Algorithms 3rd ed. pg. 284
     // Hacker's Delight divmnu64.c
@@ -113,7 +109,7 @@ std::vector<uint32_t> knuth(std::vector<uint32_t> const& x, std::vector<uint32_t
         return knuth(x, y[0], remainder);
 
     auto static constexpr B = 1ull << 32;
-    auto Q = std::vector<uint32_t>(x.size());
+    auto Q = std::deque<uint32_t>(x.size());
     auto S = __builtin_clz(y.back());
     auto D = B >> S;
     auto U = naive_multiplication(x, D);
@@ -200,7 +196,6 @@ BigInt::BigInt(uint64_t number)
 
 BigInt::BigInt(std::string number)
 {
-    m_groups.reserve((number.size() / digits) + 1);
     m_negative = number[0] == '-';
 
     bool skip_first = m_negative || number[0] == '+';
@@ -241,7 +236,7 @@ BigInt::BigInt(std::string number)
             m_groups.push_back(num);
     }
 
-    auto z = std::vector<uint32_t> {};
+    auto z = std::deque<uint32_t> {};
 
     for (auto git = m_groups.rbegin(); git != m_groups.rend(); git++)
         z = naive_muladd(z, base, *git);
@@ -251,7 +246,7 @@ BigInt::BigInt(std::string number)
     emsmallen();
 }
 
-BigInt::BigInt(std::vector<uint32_t> group)
+BigInt::BigInt(std::deque<uint32_t> group)
     : m_groups(group)
     , m_negative(false)
 {
@@ -401,7 +396,7 @@ BigInt& BigInt::operator<<=(int rhs)
         return *this >>= -rhs;
 
     auto new_groups = rhs / 32;
-    auto z = std::vector<uint32_t>(new_groups);
+    auto z = std::deque<uint32_t>(new_groups);
     z.insert(z.end(), m_groups.begin(), m_groups.end());
 
     m_groups = naive_multiplication(z, 1ull << (rhs % 32));
@@ -517,8 +512,8 @@ std::ostream& operator<<(std::ostream& stream, BigInt const& number)
     if (size == 1)
         return stream << group[0];
 
-    auto static muladd10 = [&](std::vector<uint32_t> x, uint64_t mul, uint64_t add) -> std::vector<uint32_t> {
-        auto z = std::vector<uint32_t>(2 * number.m_groups.size() + 1);
+    auto static muladd10 = [&](std::deque<uint32_t> x, uint64_t mul, uint64_t add) -> std::deque<uint32_t> {
+        auto z = std::deque<uint32_t>(2 * number.m_groups.size() + 1);
         auto static constexpr base = BigInt::base;
 
         for (auto i = 0; i < x.size(); i++) {
@@ -539,7 +534,7 @@ std::ostream& operator<<(std::ostream& stream, BigInt const& number)
         return z;
     };
 
-    auto z = std::vector<uint32_t> {};
+    auto z = std::deque<uint32_t> {};
 
     for (auto git = number.m_groups.rbegin(); git != number.m_groups.rend(); git++)
         z = muladd10(z, 1ull << 32, *git);

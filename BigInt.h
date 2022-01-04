@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <string>
 #include <utility>
-#include <vector>
+#include <deque>
 
 template <typename T>
 concept Numeric = std::convertible_to<T, std::size_t>;
@@ -44,7 +44,7 @@ public:
     BigInt();
     BigInt(uint64_t value);
     BigInt(std::string number);
-    BigInt(std::vector<uint32_t> group);
+    BigInt(std::deque<uint32_t> group);
 
     BigInt& operator+=(BigInt const& rhs);
     BigInt& operator-=(BigInt const& rhs);
@@ -78,18 +78,18 @@ public:
 
     friend std::ostream& operator<<(std::ostream& stream, BigInt const& number);
 
-    inline std::vector<uint32_t> const& groups() const { return m_groups; }
+    inline std::deque<uint32_t> const& groups() const { return m_groups; }
     inline bool is_negative() const { return m_negative; }
 
 private:
-    std::vector<uint32_t> m_groups;
+    std::deque<uint32_t> m_groups;
     bool m_negative;
 
     void embiggen(BigInt const& other);
     void embiggen(size_t size);
     void emsmallen();
 
-    friend void emsmallen(std::vector<uint32_t>& groups);
+    friend void emsmallen(std::deque<uint32_t>& groups);
 
     // TODO: Make this work for radices not 10
     size_t static constexpr radix = 10;
@@ -98,12 +98,12 @@ private:
     size_t static constexpr base_sz = sizeof(uint32_t) * 8;
 
     // Multiplication algorithms
-    friend std::vector<uint32_t> naive_multiplication(std::vector<uint32_t> const& x, uint64_t y); // O(n^2)
-    friend std::vector<uint32_t> naive_multiplication(std::vector<uint32_t> const& x, std::vector<uint32_t> const& y); // O(n^2)
-    friend std::vector<uint32_t> naive_muladd(std::vector<uint32_t> const& x, uint64_t mul, uint64_t add); // O(n^2)
+    friend std::deque<uint32_t> naive_multiplication(std::deque<uint32_t> const& x, uint64_t y); // O(n^2)
+    friend std::deque<uint32_t> naive_multiplication(std::deque<uint32_t> const& x, std::deque<uint32_t> const& y); // O(n^2)
+    friend std::deque<uint32_t> naive_muladd(std::deque<uint32_t> const& x, uint64_t mul, uint64_t add); // O(n^2)
     friend BigInt karatsuba(BigInt const& a, BigInt const& b); // O(n^1.58)
 
     // Division algorithms
-    friend std::vector<uint32_t> knuth(std::vector<uint32_t> const& x, uint64_t y, bool remainder); // O(n^2)
-    friend std::vector<uint32_t> knuth(std::vector<uint32_t> const& x, std::vector<uint32_t> const& y, bool remainder); // O(n^2)
+    friend std::deque<uint32_t> knuth(std::deque<uint32_t> const& x, uint64_t y, bool remainder); // O(n^2)
+    friend std::deque<uint32_t> knuth(std::deque<uint32_t> const& x, std::deque<uint32_t> const& y, bool remainder); // O(n^2)
 };

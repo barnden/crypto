@@ -163,7 +163,7 @@ std::deque<uint32_t> knuth(std::deque<uint32_t> const& x, std::deque<uint32_t> c
     }
 
     if (remainder)
-        for (auto i = 0; i < n-1; i++)
+        for (auto i = 0; i < n - 1; i++)
             Q[i] = (Q[i] >> S) | static_cast<uint64_t>(Q[i + 1] << (32 - S));
 
     emsmallen(Q);
@@ -255,12 +255,8 @@ BigInt::BigInt(std::deque<uint32_t> group)
 
 size_t BigInt::size() const
 {
-    size_t n = digits * (m_groups.size() - 1);
-
-    for (auto i = m_groups.back(); i > 0; i /= 10)
-        n++;
-
-    return n;
+    // Get size of number in bits
+    return ((m_groups.size() - 1) * 32) + (32 - __builtin_clz(m_groups.back()));
 }
 
 BigInt& BigInt::operator-=(BigInt const& rhs)
@@ -395,11 +391,20 @@ BigInt& BigInt::operator<<=(int rhs)
     if (rhs < 0)
         return *this >>= -rhs;
 
-    auto new_groups = rhs / 32;
-    auto z = std::deque<uint32_t>(new_groups);
-    z.insert(z.end(), m_groups.begin(), m_groups.end());
+    auto groups = rhs / 32;
 
-    m_groups = naive_multiplication(z, 1ull << (rhs % 32));
+    for (auto i = 0; i < groups; i++)
+        m_groups.push_front(0);
+
+    auto s = rhs % 32;
+
+    if (__builtin_clz(m_groups.back()) < s)
+        m_groups.push_back(0);
+
+    for (auto i = m_groups.size() - 1; i > 0; i--)
+        m_groups[i] = (m_groups[i] << s) | (m_groups[i - 1] >> (32 - s));
+
+    m_groups[0] <<= s;
 
     emsmallen();
 
@@ -413,6 +418,25 @@ BigInt& BigInt::operator>>=(int rhs)
 
     if (rhs < 0)
         return *this <<= -rhs;
+
+    if (rhs >= size()) {
+        m_groups.clear();
+        m_groups[0] = 0;
+
+        return *this;
+    }
+
+    auto groups = rhs / 32;
+    for (auto i = 0; i < groups; i++)
+        m_groups.pop_front();
+
+    auto s = rhs % 32;
+    for (auto i = 0; i < m_groups.size() - 1; i++)
+        m_groups[i] = (m_groups[i] >> s) | static_cast<uint64_t>(m_groups[i + 1] << (32 - s));
+
+    m_groups[m_groups.size() - 1] >>= s;
+
+    emsmallen();
 
     return *this;
 }

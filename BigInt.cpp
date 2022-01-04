@@ -74,6 +74,71 @@ std::vector<base_t> knuth(std::vector<base_t> const& x, acc_t y)
     return Q;
 }
 
+template <Numeric base_t, Numeric acc_t>
+std::vector<base_t> knuth(std::vector<base_t> const& x, std::vector<base_t> const& y)
+{
+    if (y.size() == 1)
+        return knuth<base_t, acc_t>(x, y[0]);
+
+    auto B = 1ull << BigInt::base_sz;
+    auto Q = std::vector<base_t>(x.size());
+    auto D = B >> __builtin_clz(y.back());
+    auto U = naive_multiplication<base_t, acc_t>(x, D);
+    auto V = naive_multiplication<base_t, acc_t>(y, D);
+
+    while (U.back() == 0 && U.size() > 1)
+        U.pop_back();
+
+    while (V.back() == 0 && V.size() > 1)
+        V.pop_back();
+
+    U.push_back(0); // |U| = m + n + 1
+
+    auto n = V.size();
+    auto m = U.size() - n;
+
+    for (auto j = m; j-- > 0;) {
+        auto qhat = (static_cast<acc_t>(U[n + j]) << BigInt::base_sz) + U[n + j - 1] / V[n - 1];
+        auto rhat = (static_cast<acc_t>(U[n + j]) << BigInt::base_sz) + U[n + j - 1] % V[n - 1];
+
+        while (qhat >= B || qhat * V[n - 2] > ((rhat << BigInt::base_sz) + U[n + j - 2])) {
+            qhat--;
+            rhat += V[n - 1];
+
+            if (rhat >= B)
+                break;
+        }
+
+        auto k = acc_t {};
+        auto t = acc_t {};
+        for (auto i = 0; i < n; i++) {
+            auto p = qhat * V[i];
+            t = U[i + j] - k - static_cast<int64_t>(p);
+            U[i + j] = t;
+            k = (p >> BigInt::base_sz) - (t >> BigInt::base_sz);
+        }
+
+        t = U[n + j] - k;
+        U[n + j] = t;
+
+        Q[j] = qhat;
+        if (t < 0) {
+            Q[j] = Q[j] - 1;
+            k = 0;
+
+            for (auto i = 0; i < n; i++) {
+                t = static_cast<uint64_t>(U[i + j]) + V[i] + k;
+                U[i + j] = t;
+                k = t >> BigInt::base_sz;
+            }
+
+            U[n + j] += k;
+        }
+    }
+
+    return Q;
+}
+
 BigInt::BigInt()
     : m_negative(false)
 {

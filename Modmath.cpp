@@ -1,7 +1,7 @@
 #include "Modmath.h"
-#include <algorithm>
+#include <random>
 
-uint64_t gcd(uint64_t a, uint64_t b)
+BigInt gcd(BigInt const& a, BigInt const& b)
 {
     // TODO: Implement binary gcd for faster (?) computations
     // On my system I've found binary gcd to be slower than just Euclid's
@@ -12,17 +12,20 @@ uint64_t gcd(uint64_t a, uint64_t b)
     return gcd(b % a, a);
 }
 
-uint64_t Totient(uint64_t n)
+BigInt Totient(BigInt const& n)
 {
     // Return Euler Totient Function of n
-    auto accumulator = 1ull;
+    auto accumulator = BigInt { 1 };
+
+    if (n == 0)
+        return { 0 };
 
     if (n == 1)
         return accumulator;
 
     // Totient(p) = p - 1, where p prime.
     // Check if number is prime
-    if (n > 41 && n % 2 && !MillerRabin(n))
+    if (n % 2 == 1 && !MillerRabin(n))
         return n - 1;
 
     /** Optimization:
@@ -33,16 +36,17 @@ uint64_t Totient(uint64_t n)
      *  = Totient(2^q) * Totient(r)
      *  = 2^(q-1) * Totient(r)
      *  = (1 << q - 1) * Totient(r)
-    */
+     */
 
-    auto k = __builtin_ctzll(n);
+    auto k = n.trailing_zeros();
 
     if (k)
-        return (1 << (k - 1)) * Totient(n >> k);
+        return Totient(n >> k) << (k - 1);
 
-    for (auto i = 2; i < n; i++)
+    // FIXME: This part is exponential, we can achieve sub-exponential results using Lenstra/Quadratic Sieve/GNFS methods.
+    for (BigInt i = 3; i < n; i += 1)
         if (gcd(i, n) == 1)
-            accumulator++;
+            accumulator += 1;
 
     return accumulator;
 }
@@ -95,24 +99,10 @@ uint64_t Modinv(uint64_t n, uint64_t mod)
     return coeff;
 }
 
-uint64_t Modexp(uint64_t base, uint64_t exp, uint64_t mod)
+BigInt Modexp(BigInt const& base, BigInt exp, BigInt const& mod)
 {
     // Implementation of fast powering approach to exponentiation in integer rings
-
-    /**
-     * Allow negative exponents?
-     * Currently we assume positive exponent.
-     * However, we could change exp to int64_t, then compute
-     * a = Modexp(base, |exp|, mod), then return Modinv(a, mod)
-     * if exp < 0.
-     *
-     * TODO: Verify this assumption:
-     * Since uint64_t is essentially the same as (mod 2^64) (**).
-     * Switching exp to int64_t won't change too much, i.e.
-     * Modexp(2, 2^64 - 1, 97) in is the same as Modexp(2, -1, 97).
-     *
-     * (**): Technically overflow is undefined behavior in ISO C++.
-     */
+    // TODO: Handle negative exponents, i.e. find d := Modinv(base, mod), then return Modexp(d, exp, mod).
 
     // If a = 0 (mod m), then a^n = 0 (mod m) for all n in Z/mZ
     if (base % mod == 0)
@@ -123,17 +113,16 @@ uint64_t Modexp(uint64_t base, uint64_t exp, uint64_t mod)
         return (base * base) % mod;
 
     // Given a^n (mod m); If n > m, then exp := exp (mod Totient(m))
-    if (exp > mod)
-        exp %= Totient(mod);
+    // if (exp > mod)
+    //     exp %= Totient(mod);
 
-    auto const m = (sizeof(exp) * 8) - __builtin_clzll(exp);
-    auto accumulator = 1ull;
+    auto accumulator = BigInt { 1 };
 
 #ifdef MONTGOMERY
     // Use Montgomery ladder method to do fast powering
     auto g = base;
-    for (auto i = m; i-- > 0;) {
-        if (exp & (1 << i)) {
+    for (auto i = exp.size(); i-- > 0;) {
+        if (exp.bit_at(i)) {
             accumulator = (accumulator * g) % mod;
             g = (g * g) % mod;
             continue;
@@ -144,18 +133,18 @@ uint64_t Modexp(uint64_t base, uint64_t exp, uint64_t mod)
     }
 #else
     // Use traditional fast powering; suceptible to side channel attacks
-    for (auto i = m; i-- > 0;) {
+    for (auto i = exp.size(); i-- > 0;) {
         accumulator = (accumulator * accumulator) % mod;
 
-        if (exp & (1 << i))
+        if (exp.bit_at(i))
             accumulator = (accumulator * base) % mod;
     }
 #endif
 
-    return accumulator;
+    return accumulator % mod;
 }
 
-bool MillerRabin(uint64_t n)
+bool MillerRabin(BigInt const& n)
 {
     /**
      * Miller-Rabin primality test
@@ -163,49 +152,60 @@ bool MillerRabin(uint64_t n)
      *
      * Miller-Rabin is a non-deterministic primality test.
      * It has been shown by Sorenson and Webster (doi:10.1090/mcom/3134) that for
-     * a composite number n < 3,317,044,064,679,887,385,961,981 at least one of
-     * the bases below will be a witness to the compositeness of n. Thus, for the
-     * values of n less than the bound, Miller-Rabin is effectively deterministic.
+     * a composite number n < 3,317,044,064,679,887,385,961,981 (< 82 bits) at
+     * least one of the bases below will be a witness to the compositeness of n.
      */
 
-    if (n % 2 == 0)
+    if (n.get_groups()[0] % 2 == 0)
         return true;
 
-    auto r = 0;
     auto np = n - 1;
-    auto d = np;
+    auto r = np.trailing_zeros();
+    auto d = np >> r;
 
-    while (d % 2 == 0) {
-        d >>= 1;
-        r++;
-    }
-
-    auto static constexpr bases = std::integer_sequence<uint64_t, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41> {};
+    auto static constexpr bases = std::integer_sequence<uint64_t, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43> {};
     bool composite = false;
 
-    [&]<std::size_t... I>(std::integer_sequence<uint64_t, I...>)
-    {
-        ([&](std::size_t base) {
-            if (composite)
+    auto static MRTest = [&](std::size_t base) {
+        if (base == n)
+            return;
+
+        if (composite)
+            return;
+
+        auto x = Modexp(base, d, n);
+
+        if (x == 1 || x == np)
+            return;
+
+        for (auto i = 0ull; i < r; i++) {
+            x = (x * x) % n;
+
+            if (x == np)
                 return;
+        }
 
-            auto x = Modexp(base, d, n);
+        composite = true;
+    };
 
-            if (x == 1 || x == np)
-                return;
-
-            for (auto i = 0ull; i < r; i++) {
-                x = Modexp(base, 2, n);
-
-                if (x == np)
-                    return;
-            }
-
-            composite = true;
-        }(I),
-         ...);
-    }
+    [&]<std::size_t... I>(std::integer_sequence<uint64_t, I...>) { (MRTest(I), ...); }
     (bases);
+
+    // Early return if bit length is less than 82; see comments above.
+    if (n.size() < 82 || composite)
+        return composite;
+
+    // Otherwise, we perform MR using randomized bases
+    auto static rd = std::random_device {};
+    auto static e2 = std::mt19937_64 { rd() };
+    auto static dist = std::uniform_int_distribution<uint64_t> { 1ull << 61, 1ull << 62 };
+
+    for (auto i = 0; i < 40; i++) {
+        if (composite)
+            return true;
+
+        MRTest(dist(e2));
+    }
 
     return composite;
 }

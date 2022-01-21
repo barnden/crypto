@@ -328,37 +328,27 @@ BigInt& BigInt::operator-=(BigInt const& rhs)
     if (rhs.m_negative)
         return *this += -rhs;
 
-    embiggen(rhs);
+    auto it = m_groups.begin();
 
-    auto lit = m_groups.begin();
-    auto const& lend = m_groups.end();
+    auto lit = std::as_const(m_groups).begin();
+    auto lend = std::as_const(m_groups).end();
 
-    auto rit = std::as_const(rhs.m_groups).begin();
-    auto const& rend = rhs.m_groups.end();
+    auto rit = rhs.m_groups.begin();
+    auto rend = rhs.m_groups.end();
 
-    auto sum = uint64_t {};
-    while (lit != lend || rit != rend) {
-        if (lit != lend) {
-            sum += *lit;
-            lit++;
-        }
+    if (*this < rhs) {
+        std::swap(lit, rit);
+        std::swap(lend, rend);
 
-        if (rit != rend) {
-            sum -= *rit;
-            rit++;
-        }
+        m_negative = true;
+    }
 
-        if (sum < 0) {
-            *std::prev(lit) = -sum;
-            sum = 0;
-            m_negative = true;
-        } else {
-            *std::prev(lit) = static_cast<uint32_t>(sum);
-            sum >>= 32;
+    auto borrow = int64_t {};
 
-            if (sum != 0)
-                m_negative = false;
-        }
+    for (; lit != lend; lit++, rit++, it++) {
+        auto difference = static_cast<int64_t>(*lit) - static_cast<int64_t>(*rit) + borrow;
+        *it = static_cast<uint32_t>(difference);
+        borrow = difference >> 32;
     }
 
     emsmallen();

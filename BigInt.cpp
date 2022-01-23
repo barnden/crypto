@@ -1,7 +1,22 @@
 #include "BigInt.h"
 #include <algorithm>
 #include <iostream>
+#include <random>
 #include <stdexcept>
+
+void BigInt::random(int bits)
+{
+    // Generate a random big integer
+    auto static rd = std::random_device {};
+    auto static e2 = std::mt19937_64 { rd() };
+    auto static dist = std::uniform_int_distribution<uint64_t> { 1ull << 61, 1ull << 62 };
+    m_groups.clear();
+
+    for (auto i = 0; i < bits / 32; i++)
+        m_groups.push_back(static_cast<uint32_t>(dist(e2)));
+
+    m_groups.push_back(static_cast<uint32_t>(dist(e2)) >> (32 - (bits % 32)));
+}
 
 size_t BigInt::trailing_zeros() const
 {
@@ -74,16 +89,22 @@ inline void emsmallen(std::deque<uint32_t>& groups)
 
 [[gnu::flatten]] inline void BigInt::emsmallen() { ::emsmallen(m_groups); }
 
-BigInt naive_multiplication(BigInt const& x, uint64_t y)
+BigInt naive_muladd(BigInt const& x, BigInt const& mul, BigInt const& add)
 {
-    auto z = std::deque<uint32_t>(x.groups() + 2);
+    auto z = std::deque<uint32_t>(x.groups() + mul.groups());
     auto carry = uint64_t {};
 
-    for (auto i = 0; i < x.groups(); i++) {
-        auto product = static_cast<uint64_t>(x.m_groups[i]) * y + z[i];
+    z.insert(z.begin(), add.get_groups().begin(), add.get_groups().end());
 
-        z[i] = static_cast<uint32_t>(product);
-        z[i + 1] = product >> 32;
+    for (auto i = 0; i < x.groups(); i++, carry = 0) {
+        for (auto j = 0; j < mul.groups(); j++) {
+            auto product = static_cast<uint64_t>(x.m_groups[i]) * static_cast<uint64_t>(mul.m_groups[j]) + z[i + j] + carry;
+
+            z[i + j] = static_cast<uint32_t>(product);
+            carry = product >> 32;
+        }
+
+        z[i + mul.groups()] = carry;
     }
 
     emsmallen(z);
@@ -93,45 +114,7 @@ BigInt naive_multiplication(BigInt const& x, uint64_t y)
 
 BigInt naive_multiplication(BigInt const& x, BigInt const& y)
 {
-    if (y.groups() == 1)
-        return naive_multiplication(x, y.m_groups.back());
-
-    auto z = std::deque<uint32_t>(x.groups() + y.groups() + 1);
-    auto carry = uint64_t {};
-
-    for (auto i = 0; i < x.groups(); i++) {
-        carry = 0;
-
-        for (auto j = 0, k = i; j < y.groups(); j++, k++) {
-            auto product = static_cast<uint64_t>(x.m_groups[i]) * static_cast<uint64_t>(y.m_groups[j]) + z[k] + carry;
-
-            z[k] = static_cast<uint32_t>(product);
-            carry = product >> 32;
-        }
-
-        z[i + y.groups()] = carry;
-    }
-
-    emsmallen(z);
-
-    return { z };
-}
-
-BigInt naive_muladd(BigInt const& x, uint64_t mul, uint64_t add)
-{
-    auto z = naive_multiplication(x, mul);
-
-    auto carry = add;
-    for (auto i = 0; i < z.groups(); i++) {
-        auto sum = static_cast<uint64_t>(z.m_groups[i]) + carry;
-        z.m_groups[i] = static_cast<uint32_t>(sum);
-        carry = sum >> 32;
-    }
-
-    if (carry)
-        z.m_groups.push_back(carry);
-
-    return z;
+    return naive_muladd(x, y, { 0 });
 }
 
 BigInt knuth(BigInt const& x, uint64_t y, bool remainder)
@@ -190,8 +173,8 @@ BigInt knuth(BigInt const& x, BigInt const& y, bool remainder)
     auto m = U.size() - n;
 
     for (auto j = m; j-- > 0;) {
-        auto qhat = ((static_cast<uint64_t>(U[n + j]) << 32) | U[n + j - 1]) / V.back();
-        auto rhat = ((static_cast<uint64_t>(U[n + j]) << 32) | U[n + j - 1]) % V.back();
+        uint64_t qhat = ((static_cast<uint64_t>(U[n + j]) << 32) | U[n + j - 1]) / V.back();
+        uint64_t rhat = ((static_cast<uint64_t>(U[n + j]) << 32) | U[n + j - 1]) % V.back();
 
         while (qhat >> 32 || qhat * V[n - 2] > ((rhat << 32) | U[n + j - 2])) {
             qhat--;
@@ -683,7 +666,7 @@ std::ostream& operator<<(std::ostream& stream, BigInt const& number)
         return stream << group[0];
 
     auto static muladd10 = [&](std::deque<uint32_t> x, uint64_t mul, uint64_t add) -> std::deque<uint32_t> {
-        auto z = std::deque<uint32_t>(2 * number.m_groups.size() + 1);
+        auto z = std::deque<uint32_t>(4 * (number.groups() + 1));
         auto static constexpr base = BigInt::base;
 
         for (auto i = 0; i < x.size(); i++) {

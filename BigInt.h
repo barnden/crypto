@@ -100,6 +100,7 @@ public:
     bool is_power_of_two() const;
     bool bit_at(size_t n) const;
     BigInt abs() const;
+    void random(int bits);
 
 private:
     std::deque<uint32_t> m_groups;
@@ -118,9 +119,8 @@ private:
     size_t static constexpr base_sz = sizeof(uint32_t) * 8;
 
     // Multiplication algorithms
-    friend BigInt naive_multiplication(BigInt const& x, uint64_t y); // O(n^2)
     friend BigInt naive_multiplication(BigInt const& x, BigInt const& y); // O(n^2)
-    friend BigInt naive_muladd(BigInt const& x, uint64_t mul, uint64_t add); // O(n^2)
+    friend BigInt naive_muladd(BigInt const& x, BigInt const& mul, BigInt const& add); // O(n^2)
     friend BigInt karatsuba(BigInt const& a, BigInt const& b); // O(n^1.58)
 
     // Division algorithms

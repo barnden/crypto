@@ -79,8 +79,8 @@ inline void emsmallen(std::deque<uint32_t>& groups)
 {
     // Remove all leading digit groups valued at 0, except for the last one
     if (groups.size() == 0) {
+        // This case should never happen
         groups.push_back(0);
-        std::cout << "SHOULD NOT HAPPEN\n";
         return;
     }
 
@@ -90,8 +90,10 @@ inline void emsmallen(std::deque<uint32_t>& groups)
 
 [[gnu::flatten]] inline void BigInt::emsmallen() { ::emsmallen(m_groups); }
 
-BigInt naive_muladd(BigInt const& x, BigInt const& mul, BigInt const& add)
+template <typename T>
+BigInt naive_muladd(BigInt const& x, BigInt const& mul, BigInt const& add, T&& operation)
 {
+    // Algorithm M, The Art of Computer Programming Vol. 2 Seminumerical Algorithms 3rd ed. pg. 268
     auto z = std::deque<uint32_t>(x.groups() + mul.groups());
     auto carry = uint64_t {};
 
@@ -101,8 +103,7 @@ BigInt naive_muladd(BigInt const& x, BigInt const& mul, BigInt const& add)
         for (auto j = 0; j < mul.groups(); j++) {
             auto product = static_cast<uint64_t>(x.m_groups[i]) * static_cast<uint64_t>(mul.m_groups[j]) + z[i + j] + carry;
 
-            z[i + j] = static_cast<uint32_t>(product);
-            carry = product >> 32;
+            operation(product, carry, z[i + j]);
         }
 
         z[i + mul.groups()] = carry;
@@ -113,7 +114,16 @@ BigInt naive_muladd(BigInt const& x, BigInt const& mul, BigInt const& add)
     return { z };
 }
 
-BigInt naive_multiplication(BigInt const& x, BigInt const& y)
+[[gnu::flatten]] BigInt naive_muladd(BigInt const& x, BigInt const& mul, BigInt const& add)
+{
+    return naive_muladd(x, mul, add,
+                        [](auto const& product, auto& carry, auto& group) -> void {
+                            group = static_cast<uint32_t>(product);
+                            carry = product >> 32;
+                        });
+}
+
+[[gnu::flatten]] BigInt naive_multiplication(BigInt const& x, BigInt const& y)
 {
     return naive_muladd(x, y, { 0 });
 }
@@ -137,7 +147,7 @@ BigInt knuth(BigInt const& x, uint64_t y, bool remainder)
 
 BigInt knuth(BigInt const& x, BigInt const& y, bool remainder)
 {
-    // The Art of Computer Programming Vol. 2 Seminumerical Algorithms 3rd ed. pg. 284
+    // Algorithm D,  The Art of Computer Programming Vol. 2 Seminumerical Algorithms 3rd ed. pg. 272
     // Hacker's Delight divmnu64.c
 
     if (y.abs() == 0)

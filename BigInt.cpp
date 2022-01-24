@@ -7,9 +7,10 @@
 void BigInt::random(int bits)
 {
     // Generate a random big integer
+    // Utilizes a Mersenne twister -> determinstic, not suitable for actual cryptography
     auto static rd = std::random_device {};
     auto static e2 = std::mt19937_64 { rd() };
-    auto static dist = std::uniform_int_distribution<uint64_t> { 1ull << 61, 1ull << 62 };
+    auto static dist = std::uniform_int_distribution<uint64_t> { 0, 1ull << 32 };
     m_groups.clear();
 
     for (auto i = 0; i < bits / 32; i++)
@@ -173,14 +174,14 @@ BigInt knuth(BigInt const& x, BigInt const& y, bool remainder)
     auto m = U.size() - n;
 
     for (auto j = m; j-- > 0;) {
-        uint64_t qhat = ((static_cast<uint64_t>(U[n + j]) << 32) | U[n + j - 1]) / V.back();
-        uint64_t rhat = ((static_cast<uint64_t>(U[n + j]) << 32) | U[n + j - 1]) % V.back();
+        auto qhat = ((static_cast<uint64_t>(U[n + j]) << 32) | U[n + j - 1]) / V.back();
+        auto rhat = ((static_cast<uint64_t>(U[n + j]) << 32) | U[n + j - 1]) % V.back();
 
         while (qhat >> 32 || qhat * V[n - 2] > ((rhat << 32) | U[n + j - 2])) {
             qhat--;
             rhat += V.back();
 
-            if (!(rhat >> 32))
+            if (rhat >> 32)
                 break;
         }
 
@@ -328,8 +329,14 @@ BigInt& BigInt::operator-=(BigInt const& rhs)
 
     auto borrow = int64_t {};
 
-    for (; lit != lend; lit++, rit++, it++) {
-        auto difference = static_cast<int64_t>(*lit) - static_cast<int64_t>(*rit) + borrow;
+    for (; lit != lend; lit++, it++) {
+        auto difference = static_cast<int64_t>(*lit) + borrow;
+
+        if (rit != rend) {
+            difference -= static_cast<int64_t>(*rit);
+            rit++;
+        }
+
         *it = static_cast<uint32_t>(difference);
         borrow = difference >> 32;
     }

@@ -3,17 +3,15 @@
 
 void EllipticCurve::generate_points()
 {
-    for (auto y = 0; y < m_field; y++) {
-        // Find quadratic residue in Fm
+    for (auto y = BigInt {}; y < m_field; y += 1) {
+        // Find quadratic residues in m_field
         auto y2 = Modexp(y, 2, m_field);
 
-        for (auto x = 0; x < m_field; x++) {
+        for (auto x = BigInt {}; x < m_field; x += 1) {
             auto value = (x * (x * x + m_a) + m_b) % m_field;
 
-            if (y2 != value)
-                continue;
-
-            m_points.push_back(Point(x, y2, m_a, m_b, m_field));
+            if (y2 == value)
+                m_points.push_back(Point(x, y, m_a, m_b, m_field));
         }
     }
 }
@@ -24,14 +22,15 @@ bool Point::is_on_curve()
         return true;
 
     auto y2 = Modexp(get_y(), 2, get_field());
-    auto val = get_x() * (Modexp(get_x(), 2, get_field()) + get_a()) + get_b();
-
-    val %= get_field();
+    auto val = (get_x() * (get_x() * get_x() + get_a()) + get_b()) % get_field();
 
     return y2 == val;
 }
 
-void Point::check_validity() { assert(is_on_curve()); }
+void Point::check_validity()
+{
+    assert(is_on_curve());
+}
 
 Point Point::operator-() const
 {
@@ -44,7 +43,7 @@ Point Point::operator-() const
 
 Point& Point::operator+=(Point const& rhs)
 {
-    assert(*this ^= rhs);
+    assert(*this |= rhs);
 
     // If both points are inf, return inf
     if (get_w() == 0 && rhs.get_w() == 0)
@@ -63,7 +62,7 @@ Point& Point::operator+=(Point const& rhs)
     if (*this != rhs && get_x() == rhs.get_x())
         return Point::set_point_at_infinity(*this);
 
-    auto lambda = 0ull;
+    auto lambda = BigInt {};
     auto const field = get_field();
 
     auto const lx = get_x();
@@ -73,17 +72,14 @@ Point& Point::operator+=(Point const& rhs)
     auto const ry = rhs.get_y();
 
     if (*this == rhs) // Point doubling
-        lambda = (3 * (lx * lx) + get_a()) * Modinv(2 * ly, field);
+        lambda = ((lx * lx) * 3 + get_a()) * Modinv(ly * 2, field);
     else
-        lambda = Modsub(ry, ly, field) * Modinv(Modsub(rx, lx, field), field);
+        lambda = ((ry - ly) % field) * Modinv((rx - lx) % field, field);
 
     lambda %= field;
 
-    auto xn = Modexp(lambda, 2, field);
-    xn = Modsub(xn, lx + rx, field);
-
-    auto yn = lambda * Modsub(lx, xn, field);
-    yn = Modsub(yn, ly, field);
+    auto xn = (Modexp(lambda, 2, field) - (lx + rx)) % field;
+    auto yn = (lambda * (lx - xn) - ly) % field;
 
     // Check if on curve
 
@@ -176,7 +172,7 @@ Point operator*(int64_t lhs, Point const& rhs)
     return result *= lhs;
 }
 
-Point operator*(Point const& lhs, int rhs) { return rhs * lhs; }
+Point operator*(Point const& lhs, int64_t rhs) { return rhs * lhs; }
 
 // return true if points are on same curve
 inline bool Point::operator|=(Point const& rhs) { return static_cast<Curve>(*this) == static_cast<Curve>(rhs); }

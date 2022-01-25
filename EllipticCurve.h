@@ -5,12 +5,14 @@
 #include <ostream>
 #include <vector>
 
+#include "BigInt.h"
+
 #define ASSERT_NOT_REACHED assert(false)
 
 struct Coordinate {
     // Homogeneous coordinate of a point
-    uint64_t m_x;
-    uint64_t m_y;
+    BigInt m_x;
+    BigInt m_y;
     bool m_w = 1; // w is 0 for point at infinity; 1 otherwise
 };
 
@@ -19,16 +21,16 @@ class EllipticCurve;
 class Curve {
 public:
     Curve() { ASSERT_NOT_REACHED; }
-    Curve(uint64_t a, uint64_t b, uint64_t field)
+    Curve(BigInt a, BigInt b, BigInt field)
         : m_field(field)
         , m_a(a)
         , m_b(b)
     {
     }
 
-    inline uint64_t get_field() const { return m_field; };
-    inline uint64_t get_a() const { return m_a; };
-    inline uint64_t get_b() const { return m_b; };
+    inline BigInt get_field() const { return m_field; };
+    inline BigInt get_a() const { return m_a; };
+    inline BigInt get_b() const { return m_b; };
 
     inline friend bool operator==(Curve const& lhs, Curve const& rhs)
     {
@@ -41,28 +43,28 @@ public:
 
 private:
     friend class EllipticCurve;
-    uint64_t m_field;
-    uint64_t m_a;
-    uint64_t m_b;
+    BigInt m_field;
+    BigInt m_a;
+    BigInt m_b;
 };
 
 class Point : public Curve {
 public:
-    Point(uint64_t x, uint64_t y, uint64_t a, uint64_t b, uint64_t field)
+    Point(BigInt x, BigInt y, BigInt a, BigInt b, BigInt field)
         : m_coord(Coordinate(x, y))
         , Curve(a, b, field)
     {
         check_validity();
     }
 
-    Point(uint64_t x, uint64_t y, Curve const& curve)
+    Point(BigInt x, BigInt y, Curve const& curve)
         : m_coord(Coordinate(x, y))
         , Curve(curve)
     {
         check_validity();
     }
 
-    Point(Coordinate coord, uint64_t a, uint64_t b, uint64_t field)
+    Point(Coordinate coord, BigInt a, BigInt b, BigInt field)
         : m_coord(coord)
         , Curve(a, b, field)
     {
@@ -88,8 +90,8 @@ public:
         return point;
     }
 
-    uint64_t get_x() const { return m_coord.m_x; }
-    uint64_t get_y() const { return m_coord.m_y; }
+    BigInt get_x() const { return m_coord.m_x; }
+    BigInt get_y() const { return m_coord.m_y; }
 
     // The point at infinity is represented with homogeneous coordinate of w=0; and w=1 otherwise
     bool get_w() const { return m_coord.m_w; }
@@ -121,10 +123,15 @@ private:
 };
 
 class EllipticCurve : public Curve {
+private:
+    std::vector<Point> m_points;
+
+    void generate_points();
+
 public:
     EllipticCurve() { ASSERT_NOT_REACHED; }
 
-    EllipticCurve(uint64_t a, uint64_t b, uint64_t field)
+    EllipticCurve(BigInt a, BigInt b, BigInt field)
         : Curve(a, b, field)
     {
     }
@@ -136,9 +143,4 @@ public:
 
         return m_points;
     };
-
-private:
-    std::vector<Point> m_points;
-
-    void generate_points();
 };

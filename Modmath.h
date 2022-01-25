@@ -14,6 +14,8 @@ BigInt Modinv(BigInt const& n, BigInt const& mod);
 
 BigInt Modexp(BigInt const& base, BigInt exp, BigInt const& mod);
 
+BigInt LenstraFactorization(BigInt const& n);
+
 bool MillerRabin(BigInt const& n);
 
 inline uint64_t Modsub(uint64_t a, uint64_t b, uint64_t mod)

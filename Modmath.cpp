@@ -233,3 +233,51 @@ bool MillerRabin(BigInt const& n)
 
     return composite;
 }
+
+BigInt LenstraFactorization(BigInt const& n)
+{
+    // Find a nontrival factor of n using Lenstra's factorization method
+    // Works best for n semiprime, i.e. n = pq where p and q distinct primes and q of much smaller order than p
+
+    // FIXME: Make this interface nicer, perhaps static random to construct new BigInt directly
+    // Something like: auto a  = BigInt.random() % n;
+
+    auto a = BigInt();
+    auto x = BigInt();
+    auto y = BigInt();
+
+    a.random(n.size());
+    x.random(n.size());
+    y.random(n.size());
+
+    a %= n;
+    x %= n;
+    y %= n;
+
+    // FIXME: a - b - c != a - (b + c)
+    // Currently: a - (b + c) gives the expected result for a - b - c, which is what we use below.
+    auto b = ((y * y) - ((x * x * x) + (x * a))) % n;
+
+    auto ec = EllipticCurve(a, b, n);
+    auto P = Point(x, y, ec);
+
+    auto j = 1;
+
+    while (j++) {
+        auto Q = j * P;
+
+        if (!Q.get_w()) {
+            auto d = gcd(Q.get_x() - P.get_x(), n);
+
+            if (d == 1 || d == n)
+                return LenstraFactorization(n);
+
+            return d;
+        }
+
+        P = Q;
+    }
+
+    // This is here to make the compiler happy
+    return 0;
+}

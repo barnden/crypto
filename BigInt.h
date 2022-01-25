@@ -119,7 +119,7 @@ private:
     size_t static constexpr base_sz = sizeof(uint32_t) * 8;
 
     // Multiplication algorithms
-    template<typename T>
+    template <typename T>
     friend BigInt naive_muladd(BigInt const& x, BigInt const& mul, BigInt const& add, T&& operation); // O(n^2)
     friend BigInt naive_muladd(BigInt const& x, BigInt const& mul, BigInt const& add); // O(n^2)
     friend BigInt naive_multiplication(BigInt const& x, BigInt const& y); // O(n^2)

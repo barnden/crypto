@@ -334,6 +334,9 @@ BigInt& BigInt::operator-=(BigInt const& rhs)
         std::swap(lit, rit);
         std::swap(lend, rend);
 
+        embiggen(rhs);
+        rend = std::as_const(m_groups).end();
+
         m_negative = true;
     }
 
@@ -476,7 +479,7 @@ BigInt& BigInt::operator%=(BigInt const& rhs)
 
     m_groups = knuth(*this, rhs, true).m_groups;
 
-    if (m_negative)
+    while (m_negative)
         *this += rhs;
 
     emsmallen();
@@ -682,18 +685,32 @@ std::ostream& operator<<(std::ostream& stream, BigInt const& number)
     if (size == 1)
         return stream << group[0];
 
-    auto radix_representation = BigInt {};
+    auto static muladd10 = [&](std::deque<uint32_t> x, uint64_t mul, uint64_t add) -> std::deque<uint32_t> {
+        auto z = std::deque<uint32_t>(4 * (number.groups() + 1));
+        auto static constexpr base = BigInt::base;
+
+        for (auto i = 0; i < x.size(); i++) {
+            auto product = static_cast<uint64_t>(x[i]) * mul + z[i];
+
+            z[i] = product % base;
+            z[i + 1] = product / base;
+        }
+
+        auto carry = add;
+        for (auto i = 0; i < z.size(); i++) {
+            auto sum = static_cast<uint64_t>(z[i]) + carry;
+
+            z[i] = sum % base;
+            carry = sum / base;
+        }
+
+        return z;
+    };
+
+    auto z = std::deque<uint32_t> {};
 
     for (auto git = number.m_groups.rbegin(); git != number.m_groups.rend(); git++)
-        radix_representation = naive_muladd(radix_representation, 1ull << 32, *git,
-                                            [](auto const& product, auto& carry, auto& group) -> void {
-                                                group = static_cast<uint32_t>(product);
-                                                carry = product / BigInt::base;
-                                            });
-
-    radix_representation.emsmallen();
-
-    auto z = radix_representation.get_groups();
+        z = muladd10(z, 1ull << 32, *git);
 
     auto i = z.size() - 1;
 

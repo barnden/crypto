@@ -1,6 +1,6 @@
-#include "Modmath.h"
-#include "BigInt.h"
-#include "EllipticCurve.h"
+#include <BigInt/BigInt.h>
+#include <EllipticCurve/EllipticCurve.h>
+#include <Modmath.h>
 
 #include <iostream>
 #include <random>

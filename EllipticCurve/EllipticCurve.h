@@ -1,11 +1,11 @@
 #pragma once
 
+#include <BigInt/BigInt.h>
+
 #include <cassert>
 #include <cstdint>
 #include <ostream>
 #include <vector>
-
-#include "BigInt.h"
 
 #define ASSERT_NOT_REACHED assert(false)
 
@@ -49,31 +49,37 @@ private:
 };
 
 class Point : public Curve {
+private:
+    Coordinate m_coord;
+
+    bool is_on_curve();
+    void check_validity();
+
 public:
     Point(BigInt x, BigInt y, BigInt a, BigInt b, BigInt field)
-        : m_coord(Coordinate(x, y))
-        , Curve(a, b, field)
+        : Curve(a, b, field)
+        , m_coord(Coordinate(x, y))
     {
         check_validity();
     }
 
     Point(BigInt x, BigInt y, Curve const& curve)
-        : m_coord(Coordinate(x, y))
-        , Curve(curve)
+        : Curve(curve)
+        , m_coord(Coordinate(x, y))
     {
         check_validity();
     }
 
     Point(Coordinate coord, BigInt a, BigInt b, BigInt field)
-        : m_coord(coord)
-        , Curve(a, b, field)
+        : Curve(a, b, field)
+        , m_coord(coord)
     {
         check_validity();
     }
 
     Point(Coordinate coord, Curve const& curve)
-        : m_coord(coord)
-        , Curve(curve)
+        : Curve(curve)
+        , m_coord(coord)
     {
         check_validity();
     }
@@ -114,12 +120,6 @@ public:
     bool operator!=(Point const& rhs);
 
     friend std::ostream& operator<<(std::ostream& stream, Point const& point);
-
-private:
-    Coordinate m_coord;
-
-    bool is_on_curve();
-    void check_validity();
 };
 
 class EllipticCurve : public Curve {

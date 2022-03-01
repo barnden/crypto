@@ -5,6 +5,10 @@
 #include <string>
 #include <utility>
 
+#include <BigInt/Algorithms/Algorithms.h>
+
+void emsmallen(std::deque<uint32_t>& groups);
+
 template <typename T>
 concept Numeric = std::convertible_to<T, std::size_t>;
 
@@ -33,16 +37,31 @@ T constexpr get_base()
     auto constexpr max_digits = get_max_digits<T, R>();
 
     T base = 1;
-    for (auto i = 0; i < max_digits; i++)
+    for (auto i = 0uz; i < max_digits; i++)
         base *= R;
 
     return base;
 }
 
 class BigInt {
+
+private:
+    std::deque<uint32_t> m_groups;
+    bool m_negative;
+
+    void embiggen(BigInt const& other);
+    void embiggen(size_t size);
+    void emsmallen();
+
+    // TODO: Make this work for radices not 10
+    size_t static constexpr radix = 10;
+    size_t static constexpr digits = get_max_digits<uint32_t, radix>();
+    size_t static constexpr base = get_base<uint32_t, radix>();
+    size_t static constexpr base_sz = sizeof(uint32_t) * 8;
+
 public:
     BigInt();
-    BigInt(uint64_t value);
+    BigInt(int64_t value);
     BigInt(std::string number);
     BigInt(std::deque<uint32_t> group);
 
@@ -97,35 +116,8 @@ public:
     inline std::deque<uint32_t> const& get_groups() const { return m_groups; }
     inline bool is_negative() const { return m_negative; }
     size_t trailing_zeros() const;
-    bool is_power_of_two() const;
     bool bit_at(size_t n) const;
     BigInt abs() const;
     void random(int bits);
-
-private:
-    std::deque<uint32_t> m_groups;
-    bool m_negative;
-
-    void embiggen(BigInt const& other);
-    void embiggen(size_t size);
-    void emsmallen();
-
-    friend void emsmallen(std::deque<uint32_t>& groups);
-
-    // TODO: Make this work for radices not 10
-    size_t static constexpr radix = 10;
-    size_t static constexpr digits = get_max_digits<uint32_t, radix>();
-    size_t static constexpr base = get_base<uint32_t, radix>();
-    size_t static constexpr base_sz = sizeof(uint32_t) * 8;
-
-    // Multiplication algorithms
-    template <typename T>
-    friend BigInt naive_muladd(BigInt const& x, BigInt const& mul, BigInt const& add, T&& operation); // O(n^2)
-    friend BigInt naive_muladd(BigInt const& x, BigInt const& mul, BigInt const& add); // O(n^2)
-    friend BigInt naive_multiplication(BigInt const& x, BigInt const& y); // O(n^2)
-    friend BigInt karatsuba(BigInt const& a, BigInt const& b); // O(n^1.58)
-
-    // Division algorithms
-    friend BigInt knuth(BigInt const& x, uint64_t y, bool remainder); // O(n^2)
-    friend BigInt knuth(BigInt const& x, BigInt const& y, bool remainder); // O(n^2)
+    bool is_power_of_two() const;
 };

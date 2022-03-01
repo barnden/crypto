@@ -1,8 +1,102 @@
-#include "BigInt.h"
+#include <BigInt/Algorithms/Algorithms.h>
+#include <BigInt/BigInt.h>
+
 #include <algorithm>
 #include <iostream>
 #include <random>
 #include <stdexcept>
+
+BigInt::BigInt()
+    : m_groups({})
+    , m_negative(false)
+{
+    m_groups.push_back(0);
+}
+
+BigInt::BigInt(int64_t number)
+    : m_groups({})
+    , m_negative(false)
+{
+    if (number < 0ll) {
+        m_negative = true;
+        number *= -1;
+    }
+
+    auto static constexpr offset = sizeof(uint32_t) * 8;
+
+    if (number == 0) {
+        m_groups.push_back(0);
+    } else {
+        while (number) {
+            m_groups.push_back(static_cast<uint32_t>(number));
+
+            number >>= offset;
+        }
+    }
+}
+
+BigInt::BigInt(std::string number)
+    : m_groups({})
+{
+    m_negative = number[0] == '-';
+
+    bool skip_first = m_negative || number[0] == '+';
+
+    // Ignore all spaces, commas, single quotes
+    [&]<char... I>(std::integer_sequence<char, I...>)
+    {
+        ([&](char c) {
+            std::string::iterator delim;
+            while ((delim = std::find(number.begin(), number.end(), c)) != number.end())
+                number.erase(delim);
+        }(I),
+         ...);
+    }
+    (std::integer_sequence<char, ',', ' ', '\''> {});
+
+    auto size = number.size();
+    while (size > skip_first) {
+        auto place = 1ull;
+        auto num = uint32_t {};
+        auto stop = size - digits;
+
+        if (__builtin_sub_overflow_p(size, digits, stop))
+            stop = 0;
+
+        for (auto i = size; i-- > stop; size--) {
+            auto c = number[i];
+
+            if (c < '0' || c > '9')
+                break;
+
+            num += (c - '0') * place;
+
+            place *= 10;
+        }
+
+        if (num || !m_groups.size())
+            m_groups.push_back(num);
+    }
+
+    auto z = BigInt {};
+    auto add = BigInt {};
+
+    for (auto git = m_groups.rbegin(); git != m_groups.rend(); git++) {
+        add.m_groups[0] = *git;
+        z = naive_muladd(z, base, &add);
+    }
+
+    m_groups = z.m_groups;
+
+    emsmallen();
+}
+
+BigInt::BigInt(std::deque<uint32_t> group)
+    : m_groups(group)
+    , m_negative(false)
+{
+    emsmallen();
+}
 
 void BigInt::random(int bits)
 {
@@ -71,7 +165,7 @@ void BigInt::embiggen(size_t size)
     if (groups() > size)
         return;
 
-    for (auto i = 0; i <= size - groups(); i++)
+    for (auto i = 0uz; i <= size - groups(); i++)
         m_groups.push_back(0);
 }
 
@@ -88,234 +182,7 @@ inline void emsmallen(std::deque<uint32_t>& groups)
         groups.pop_back();
 }
 
-[[gnu::flatten]] inline void BigInt::emsmallen() { ::emsmallen(m_groups); }
-
-template <typename T>
-BigInt naive_muladd(BigInt const& x, BigInt const& mul, BigInt const& add, T&& operation)
-{
-    // Algorithm M, The Art of Computer Programming Vol. 2 Seminumerical Algorithms 3rd ed. pg. 268
-    auto z = std::deque<uint32_t>(x.groups() + mul.groups());
-    auto carry = uint64_t {};
-
-    z.insert(z.begin(), add.get_groups().begin(), add.get_groups().end());
-
-    for (auto i = 0; i < x.groups(); i++, carry = 0) {
-        for (auto j = 0; j < mul.groups(); j++) {
-            auto product = static_cast<uint64_t>(x.m_groups[i]) * static_cast<uint64_t>(mul.m_groups[j]) + z[i + j] + carry;
-
-            operation(product, carry, z[i + j]);
-        }
-
-        z[i + mul.groups()] = carry;
-    }
-
-    emsmallen(z);
-
-    return { z };
-}
-
-[[gnu::flatten]] BigInt naive_muladd(BigInt const& x, BigInt const& mul, BigInt const& add)
-{
-    return naive_muladd(x, mul, add,
-                        [](auto const& product, auto& carry, auto& group) -> void {
-                            group = static_cast<uint32_t>(product);
-                            carry = product >> 32;
-                        });
-}
-
-[[gnu::flatten]] BigInt naive_multiplication(BigInt const& x, BigInt const& y)
-{
-    return naive_muladd(x, y, { 0 });
-}
-
-BigInt knuth(BigInt const& x, uint64_t y, bool remainder)
-{
-    auto Q = std::deque<uint32_t>(x.groups());
-    auto k = uint64_t {};
-
-    for (auto j = x.groups(); j-- > 0;) {
-        uint64_t t = (k << 32) + x.m_groups[j];
-        Q[j] = t / y;
-        k = t - Q[j] * y;
-    }
-
-    if (remainder)
-        return BigInt(std::deque<uint32_t> { static_cast<uint32_t>(k), static_cast<uint32_t>(k >> 32) });
-
-    return BigInt { Q };
-}
-
-BigInt knuth(BigInt const& x, BigInt const& y, bool remainder)
-{
-    // Algorithm D,  The Art of Computer Programming Vol. 2 Seminumerical Algorithms 3rd ed. pg. 272
-    // Hacker's Delight divmnu64.c
-
-    if (y.abs() == 0)
-        throw new std::runtime_error("[BigInt] Div by 0.");
-
-    if (y.groups() == 1)
-        return knuth(x, y.m_groups[0], remainder);
-
-    if (x.abs() < y.abs()) {
-        if (remainder)
-            return x;
-
-        return { 0 };
-    }
-
-    if (x.abs() == y.abs()) {
-        if (remainder)
-            return { 0 };
-
-        return { 1 };
-    }
-
-    auto Q = std::deque<uint32_t>(x.groups());
-    auto S = __builtin_clz(y.m_groups.back());
-    auto U = (x << S).m_groups;
-    auto V = (y << S).m_groups;
-
-    emsmallen(U);
-    emsmallen(V);
-
-    U.push_back(0); // |U| = m + n + 1
-
-    auto n = V.size();
-    auto m = U.size() - n;
-
-    for (auto j = m; j-- > 0;) {
-        auto qhat = ((static_cast<uint64_t>(U[n + j]) << 32) | U[n + j - 1]) / V.back();
-        auto rhat = ((static_cast<uint64_t>(U[n + j]) << 32) | U[n + j - 1]) % V.back();
-
-        while (qhat >> 32 || qhat * V[n - 2] > ((rhat << 32) | U[n + j - 2])) {
-            qhat--;
-            rhat += V.back();
-
-            if (rhat >> 32)
-                break;
-        }
-
-        auto k = int64_t {};
-        auto t = int64_t {};
-        for (auto i = 0; i < n; i++) {
-            auto p = qhat * V[i];
-            t = static_cast<int64_t>(U[i + j]) - static_cast<uint32_t>(p) - k;
-            U[i + j] = t;
-            k = (p >> 32) - (t >> 32);
-        }
-
-        t = U[n + j] - k;
-        U[n + j] = t;
-
-        Q[j] = qhat;
-        if (t < 0) {
-            Q[j]--;
-            k = 0;
-
-            for (auto i = 0; i < n; i++) {
-                t = static_cast<uint64_t>(U[i + j]) + V[i] + k;
-                U[i + j] = t;
-                k = t >> 32;
-            }
-
-            U[n + j] += k;
-        }
-    }
-
-    if (remainder)
-        return BigInt { U } >> S;
-
-    emsmallen(Q);
-
-    return { Q };
-}
-
-BigInt::BigInt()
-    : m_negative(false)
-{
-    m_groups.push_back(0);
-}
-
-BigInt::BigInt(uint64_t number)
-    : m_negative(false)
-{
-    auto static constexpr offset = sizeof(uint32_t) * 8;
-
-    if (number < 0) {
-        m_negative = true;
-        number *= -1;
-    }
-
-    if (number == 0) {
-        m_groups.push_back(0);
-    } else {
-
-        while (number) {
-            m_groups.push_back(static_cast<uint32_t>(number));
-
-            number >>= offset;
-        }
-    }
-}
-
-BigInt::BigInt(std::string number)
-{
-    m_negative = number[0] == '-';
-
-    bool skip_first = m_negative || number[0] == '+';
-
-    // Ignore all spaces, commas, single quotes
-    [&]<char... I>(std::integer_sequence<char, I...>)
-    {
-        ([&](char c) {
-            std::string::iterator delim;
-            while ((delim = std::find(number.begin(), number.end(), c)) != number.end())
-                number.erase(delim);
-        }(I),
-         ...);
-    }
-    (std::integer_sequence<char, ',', ' ', '\''> {});
-
-    auto size = number.size();
-    while (size > skip_first) {
-        auto place = 1ull;
-        auto num = uint32_t {};
-        auto stop = size - digits;
-
-        if (__builtin_sub_overflow_p(size, digits, stop))
-            stop = 0;
-
-        for (auto i = size; i-- > stop; size--) {
-            auto c = number[i];
-
-            if (c < '0' || c > '9')
-                break;
-
-            num += (c - '0') * place;
-
-            place *= 10;
-        }
-
-        if (num || !m_groups.size())
-            m_groups.push_back(num);
-    }
-
-    auto z = BigInt {};
-
-    for (auto git = m_groups.rbegin(); git != m_groups.rend(); git++)
-        z = naive_muladd(z, base, *git);
-
-    m_groups = z.m_groups;
-
-    emsmallen();
-}
-
-BigInt::BigInt(std::deque<uint32_t> group)
-    : m_groups(group)
-    , m_negative(false)
-{
-    emsmallen();
-}
+inline void BigInt::emsmallen() { ::emsmallen(m_groups); }
 
 BigInt& BigInt::operator-=(BigInt const& rhs)
 {
@@ -406,10 +273,9 @@ BigInt& BigInt::operator+=(BigInt const& rhs)
 BigInt& BigInt::operator*=(BigInt const& rhs)
 {
     // Perform multiplication
-    // TODO: Implement Karatsuba and Toom-k
 
     m_negative ^= rhs.m_negative;
-    m_groups = naive_multiplication(*this, rhs).m_groups;
+    m_groups = multiply(*this, rhs).m_groups;
 
     emsmallen();
 
@@ -428,7 +294,7 @@ BigInt& BigInt::operator*=(int rhs)
 
 BigInt& BigInt::operator*=(uint64_t rhs)
 {
-    m_groups = naive_multiplication(*this, rhs).m_groups;
+    m_groups = multiply(*this, rhs).m_groups;
 
     emsmallen();
 
@@ -547,14 +413,14 @@ BigInt& BigInt::operator>>=(int rhs)
     if (rhs < 0)
         return *this <<= -rhs;
 
-    if (rhs >= size()) {
+    if (static_cast<size_t>(rhs) >= size()) {
         m_groups.clear();
         m_groups[0] = 0;
 
         return *this;
     }
 
-    auto groups = rhs / 32;
+    auto groups = static_cast<size_t>(rhs / 32);
 
     if (groups > m_groups.size()) {
         m_groups.clear();
@@ -563,11 +429,11 @@ BigInt& BigInt::operator>>=(int rhs)
         return *this;
     }
 
-    for (auto i = 0; i < groups; i++)
+    for (auto i = 0uz; i < groups; i++)
         m_groups.pop_front();
 
     auto s = rhs % 32;
-    for (auto i = 0; i < m_groups.size() - 1; i++)
+    for (auto i = 0uz; i < m_groups.size() - 1; i++)
         m_groups[i] = (m_groups[i] >> s) | static_cast<uint64_t>(m_groups[i + 1] << (32 - s));
 
     m_groups[m_groups.size() - 1] >>= s;
@@ -689,7 +555,7 @@ std::ostream& operator<<(std::ostream& stream, BigInt const& number)
         auto z = std::deque<uint32_t>(4 * (number.groups() + 1));
         auto static constexpr base = BigInt::base;
 
-        for (auto i = 0; i < x.size(); i++) {
+        for (auto i = 0uz; i < x.size(); i++) {
             auto product = static_cast<uint64_t>(x[i]) * mul + z[i];
 
             z[i] = product % base;
@@ -697,7 +563,7 @@ std::ostream& operator<<(std::ostream& stream, BigInt const& number)
         }
 
         auto carry = add;
-        for (auto i = 0; i < z.size(); i++) {
+        for (auto i = 0uz; i < z.size(); i++) {
             auto sum = static_cast<uint64_t>(z[i]) + carry;
 
             z[i] = sum % base;
@@ -715,7 +581,7 @@ std::ostream& operator<<(std::ostream& stream, BigInt const& number)
     auto i = z.size() - 1;
 
     while (z[i] == 0)
-        if (__builtin_sub_overflow_p(i--, 1, i))
+        if (__builtin_sub_overflow_p(i - 1, 1, i))
             return stream << 0;
 
     auto it = z.rbegin() + (z.size() - i - 1);

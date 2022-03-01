@@ -1,5 +1,5 @@
-#include "EllipticCurve.h"
-#include "Modmath.h"
+#include <EllipticCurve/EllipticCurve.h>
+#include <Modmath.h>
 
 void EllipticCurve::generate_points()
 {
